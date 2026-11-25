@@ -7,6 +7,7 @@ canvas{display:block;width:100%;height:100%;image-rendering:pixelated;pointer-ev
 #err:empty{display:none}
 </style>
 <canvas id="art" aria-label="Residue, an autonomous evolving digital artwork"></canvas><div id="err" role="status"></div>
+<script>if(!new URLSearchParams(location.search).has('study')&&!new URLSearchParams(location.search).has('v'))location.replace('./studies.html');</script>
 <script src="./physical-memory.js" defer></script>
 <script>
 'use strict';
@@ -317,6 +318,7 @@ function mutate(){
 }
 function draw(){gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.useProgram(show);bind(targets[read],0,du.tex);gl.uniform2f(du.view,canvas.width,canvas.height);gl.drawArrays(gl.TRIANGLES,0,3);}
 function frame(now){let dt=last?Math.min(now-last,100):0;last=now;if(!paused&&!document.hidden){age+=dt/1000;if(age>=nextEvent){evolve();spectralEvent();}climateEvent();deepMemory();acc=Math.min(acc+dt,100);let n=0;while(acc>=1000/30&&n<2){mutate();acc-=1000/30;n++;}if(n)draw()}requestAnimationFrame(frame)}
+window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===parent&&e.data&&e.data.type==='study-visibility'){paused=!e.data.visible;last=0}});
 let timer;new ResizeObserver(()=>{clearTimeout(timer);timer=setTimeout(()=>{let r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);let w=Math.max(2,Math.round(r.width*d)),h=Math.max(2,Math.round(r.height*d));if(targets.length&&(canvas.width!==w||canvas.height!==h)){canvas.width=w;canvas.height=h;draw()}},80)}).observe(canvas);
 canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();paused=true;el('err').textContent='Graphics context lost. Reload to restart.'});
 async function boot(){
