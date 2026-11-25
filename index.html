@@ -1,13 +1,18 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Beforeyou / Residue 002</title>
-<style>*{box-sizing:border-box}body{margin:0;background:#101010;color:#eee;font:12px/1.4 monospace}main{height:100dvh;display:flex;flex-direction:column;padding:10px;gap:9px}header,footer{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}header b{font-size:13px;letter-spacing:.08em}button,select{font:inherit;color:inherit;background:#171717;border:1px solid #444;padding:6px 9px;cursor:pointer}canvas{width:100%;height:100%;min-height:0;flex:1;display:block;image-rendering:pixelated;background:#101010}canvas:fullscreen{width:100vw;height:100vh}main.clean{padding:0;gap:0}main.clean header,main.clean footer{display:none}canvas{min-width:0;flex:1 1 0;touch-action:manipulation}#err{color:#f88}#seed{color:#aaa}footer{color:#999}#controls{display:flex;gap:5px;flex-wrap:wrap}</style>
-<main><header><b>BEFOREYOU / RESIDUE 002</b><div id="controls"><select id="layout" aria-label="Composition"><option value="0">Living atlas</option><option value="1">Mosaic</option><option value="2">Strata</option><option value="3">Monolith</option></select><select id="palette" aria-label="Palette"><option value="0">Acid / ink</option><option value="1">Cobalt / paper</option><option value="2">Signal red</option><option value="3">Phosphor</option><option value="4">Vermilion / lilac</option><option value="5">Bone / ultramarine</option></select><button id="new">New seed</button><button id="evolve">Evolve now</button><button id="hide">Clean view</button><button id="pause">Pause</button><button id="full">Fullscreen</button></div></header><canvas id="art"></canvas><footer><span id="seed"></span><span id="stats">LIVE STATEFUL SYSTEM</span><span id="err"></span></footer></main>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>LifeAfterLogic / Residue 003</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;overscroll-behavior:none}
+canvas{display:block;width:100%;height:100%;image-rendering:pixelated;pointer-events:none}
+#err{position:fixed;left:12px;bottom:12px;color:#ccc;font:12px monospace;max-width:90vw}
+#err:empty{display:none}
+</style>
+<canvas id="art" aria-label="Residue, an autonomous evolving digital artwork"></canvas><div id="err" role="status"></div>
 <script>
 'use strict';
 const canvas=document.getElementById('art'), el=id=>document.getElementById(id);
 const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,stencil:false,preserveDrawingBuffer:false});
 if(!gl){el('err').textContent='WebGL2 unavailable in this browser.';throw Error('WebGL2 unavailable')}
-let W,H,seed=0,step=0,paused=false,targets=[],fb=[],base,regions,archive,read=0,last=0,acc=0,epoch=0,age=0,nextEvent=0,boxes=[],rand,baseData,fieldData,memoryData,events=0,quality=1;
+let W,H,seed=0,step=0,paused=false,targets=[],fb=[],base,regions,archive,read=0,last=0,acc=0,epoch=0,age=0,nextEvent=0,boxes=[],rand,baseData,fieldData,memoryData,events=0,quality=1,layout=0,paletteIndex=0,era=0,nextEra=90;
 const vs=`#version 300 es
 void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.-1.,0.,1.);}`;
 const fs=`#version 300 es
@@ -28,7 +33,7 @@ void main(){
  int beat=tick/(4+int((1.-speed)*19.));
  int period=650+int(noise(ivec2(id,93),salt)*1600.);
  int season=tick/period;
- int mode=(gene+int(noise(ivec2(id,season),salt+5)*5.))%16;
+ int mode=(gene+int(noise(ivec2(id,season),salt+5)*3.))%24;
  float pulse=noise(ivec2(id,tick/(95+int(speed*180.))),salt+16);
  float phase=noise(ivec2(id,season),salt+31);
  float row=noise(ivec2(p.y/(1+int(speed*7.)),id),salt);
@@ -52,6 +57,14 @@ void main(){
  if(mode==13){int band=(p.y/3+beat/4)%7;q+=ivec2(band<4?pace:-pace,band==0?dy*2:0);gate=step(.4,fract(z.y/l+phase));}
  if(mode==14){q+=ivec2(dx,dy*2);gate=step(.3,fract((z.x*.63+z.y)/l+phase));}
  if(mode==15){float a=noise(p/ivec2(6,13),salt+beat/8);q+=a>.48?ivec2(dx,0):ivec2(0,dy);gate=step(.37,a);}
+ if(mode==16){int band=p.y/(3+int(speed*12.));int d=(band+season)%3==0?-1:1;q+=ivec2(d*pace,0);gate=step(.27,fract((z.x+float(band)*17.)/(40.+speed*90.)-t*.004));}
+ if(mode==17){int g=7+int(speed*24.);ivec2 cell=p/g;ivec2 c=p-cell*g;int edge=min(min(c.x,c.y),min(g-1-c.x,g-1-c.y));ivec2 v=c.y==edge?ivec2(1,0):c.x==g-1-edge?ivec2(0,1):c.y==g-1-edge?ivec2(-1,0):ivec2(0,-1);q+=v;gate=step(.23,noise(cell,salt));}
+ if(mode==18){int k=4+int(speed*11.);ivec2 cell=p/k;float f=noise(cell+ivec2(beat/6,0),salt);q+=ivec2(f>.5?dx*k:0,f>.5?0:dy*k);gate=step(.64,f);}
+ if(mode==19){float f=fract((z.x*.23+z.y)/(9.+speed*28.)-t*.005);q+=ivec2(f>.5?dx*pace:0,f>.5?0:dy);gate=step(.42,f);}
+ if(mode==20){int k=3+int(speed*9.);int j=(p.y/k+beat/5)%9;q+=ivec2(j<3?dx*pace:0,j>=3?dy:0);gate=step(.55,noise(ivec2(p.x/k,j),salt));}
+ if(mode==21){int k=8+int(speed*30.);ivec2 cell=p/k;ivec2 c=p-cell*k;int d=(int(noise(cell,salt)*3.99)+season)%4;q=cell*k+(d==0?ivec2(c.y,k-1-c.x):d==1?ivec2(k-1-c.y,c.x):d==2?ivec2(k-1-c.x,c.y):ivec2(c.x,k-1-c.y));gate=step(.82,noise(cell,salt+beat/7));}
+ if(mode==22){int k=5+int(speed*14.);float f=noise(ivec2(p.y/k,p.x/(k*4)),salt);q+=ivec2(dx*pace*(f>.76?3:1),f<.21?dy:0);gate=step(.2,fract(z.y/float(k)+phase));}
+ if(mode==23){float f=sin(z.x*.008+float(id))+cos(z.y*.009+t*.002);q+=abs(f)>.8?ivec2(dx*2,dy):ivec2(0,dy);gate=step(.2,fract((z.x+z.y)/(15.+speed*20.)+phase));}
  vec4 old=get(prev,p),home=get(original,p),left=get(prev,p+ivec2(-1,0)),right=get(prev,p+ivec2(1,0)),up=get(prev,p+ivec2(0,1)),down=get(prev,p+ivec2(0,-1));
  float infection=max(max(left.a,right.a),max(up.a,down.a));
  float r=noise(p,tick+salt),local=noise(p/ivec2(13,9),tick/44+salt);
@@ -59,18 +72,20 @@ void main(){
  float live=max(0.,old.a-.025);
  if(infection>.11&&r<.21+porosity*.32)live=max(live,infection-.035);
  if(pulse>.96&&local>.96&&r<.025)live=1.;
- if(pulse<.1&&old.a<.3)gate=0.;
+ if(pulse<.16&&old.a<.3)gate=0.; if(speed<.36&&tick%(2+int((.36-speed)*12.))!=0&&live<.3)gate=0.;
  if(live>.35&&r<live*.48){q=p+ivec2(dx*(1+int(live*5.)),dy*(1+int(live*2.)));gate=1.;}
  vec3 v=old.rgb;
  if(gate>.5&&inside(q)&&(owner(q)==id||(live>.32&&r<porosity*.27)))v=get(prev,q).rgb;
  // Pixel sorting: compare nearby colour values rather than generating noise.
- if(mode==12&&gate>.5&&owner(q)==id){vec3 other=get(prev,q).rgb;float x=dot(v,vec3(.3,.59,.11)),y=dot(other,vec3(.3,.59,.11));if((dx>0&&x<y)||(dx<0&&x>y))v=other;}
+ if(mode==12&&gate>.5&&inside(q)&&owner(q)==id){vec3 other=get(prev,q).rgb;float x=dot(old.rgb,vec3(.3,.59,.11)),y=dot(other,vec3(.3,.59,.11));v=((dx>0&&x<y)||(dx<0&&x>y))?other:old.rgb;}
  float sweep=fract((mode==1?z.x:z.y)/(38.+speed*135.)-t*(.001+speed*.002)+phase);
  // Repair fronts retain the graphic composition while the feedback is free to develop.
- float repair=(.009+speed*.018)*(1.-live*.77);
+ float repair=(.006+speed*.021)*(1.-live*.72);
  if(r<repair||(sweep<.035&&r<.25))v=home.rgb;
  // Coherent strips of old compositions can return, then mutate as part of the current state.
- if(pulse>.89&&fract((z.y+z.x*.14)/(14.+speed*45.)+phase)<.07&&r<.18)v=get(memoryTex,p).rgb;
+ if(pulse>.86&&fract((z.y+z.x*.14)/(14.+speed*45.)+phase)<.09&&r<.19)v=get(memoryTex,p).rgb;
+ // Occasional coherent reconstruction in narrow travelling ribbons.
+ if(pulse>.92&&fract((mode%2==0?z.x:z.y)/(65.+speed*120.)-t*.003+phase)<.014&&r<.65)v=home.rgb;
  outColor=vec4(v,live);
 }`;
 const display=`#version 300 es
@@ -82,28 +97,31 @@ const su=Object.fromEntries(['prev','original','field','memoryTex','dim','tick',
 function texture(data){let a=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,a);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,data);return a}
 function bind(t,i,u){gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_2D,t);gl.uniform1i(u,i)}
 function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let x=Math.imul(s^s>>>15,1|s);x=x+Math.imul(x^x>>>7,61|x)^x;return((x^x>>>14)>>>0)/4294967296}}
-const palettes=[['#101010','#e7e2ce','#c5ff00','#445b00','#6b6e63','#fc6b35'],['#101b44','#f2eee3','#214cff','#7c94ea','#131315','#e2aa56'],['#111113','#eee9e5','#ff3150','#822036','#77757b','#f7ac9c'],['#131a16','#f1eada','#00e6b0','#1c735b','#738077','#d5bd69'],['#2b1a32','#f1ab8b','#f33b19','#8b65a9','#f4dace','#161016'],['#e9e5d5','#1c29a5','#17171c','#9caae5','#f36a25','#a8a08c']];
+const palettes=[['#101010','#e7e2ce','#c5ff00','#445b00','#6b6e63','#fc6b35'],['#101b44','#f2eee3','#214cff','#7c94ea','#131315','#e2aa56'],['#111113','#eee9e5','#ff3150','#822036','#77757b','#f7ac9c'],['#131a16','#f1eada','#00e6b0','#1c735b','#738077','#d5bd69'],['#2b1a32','#f1ab8b','#f33b19','#8b65a9','#f4dace','#161016'],['#e9e5d5','#1c29a5','#17171c','#9caae5','#f36a25','#a8a08c'],['#111111','#e6e2d9','#ff4b0c','#77716a','#b7b4ac','#412e28'],['#e8e2d0','#29261f','#7a2320','#af9b76','#d1bd9c','#3b514a'],['#21172b','#d7c6f0','#e4ff64','#655272','#9872bf','#e9a8a2'],['#ece7e1','#171717','#2436e8','#c4c4ba','#df5f25','#3b3d47'],['#151511','#d9dbb9','#a9b900','#727552','#f3f0de','#bd482b'],['#080d18','#d5e3f1','#f12a56','#29487a','#94a6bf','#c9edbe']];
 const R=n=>Math.floor(rand()*n), pick=a=>a[R(a.length)];
 function splitBox(box,ratio,vertical){
  let {x,y,w,h}=box,n=vertical?w:h;
  let k=Math.max(8,Math.min(n-8,Math.round(n*ratio)));
  return vertical?[{x,y,w:k,h},{x:x+k,y,w:w-k,h}]:[{x,y,w,h:k},{x,y:y+k,w,h:h-k}];
 }
-function makeBox(rect,id){return {...rect,id,gene:R(16),speed:35+R(205),porosity:30+R(210),kind:R(18),bg:0,fg:1,accent:2,scale:1+R(8),phase:R(800)}}
+function makeBox(rect,id){return {...rect,id,gene:R(24),speed:12+R(232),porosity:25+R(218),kind:R(30),bg:0,fg:1,accent:2,scale:1+R(8),phase:R(800),palette:paletteIndex}}
 function styleBox(b,initial=false){
  let area=b.w*b.h/(W*H);
- b.bg=rand()<.37?0:rand()<.63?1:2;
- if(area>.085&&rand()<.65)b.bg=pick([0,1,2]);
- b.fg=b.bg===0?pick([1,2,2]):0;b.accent=pick([2,3,4,5]);
- b.kind=area>.1?pick([3,4,6,8,10,12,15,16,17]):R(18);
- if(initial&&area<.002)b.kind=pick([0,1,2,5,7,9,11,13,14]);
+ // A small number of accent fields, broad spaces, and dense islands; avoid equal-weight patchwork.
+ b.palette=paletteIndex;
+ b.bg=rand()<.45?0:rand()<.72?1:2;
+ b.fg=b.bg===0?pick([1,1,2]):0;b.accent=pick([2,2,3,4,5]);
+ b.kind=area>.07?pick([4,6,15,17,18,18,19,23,26,28,29]):R(30);
+ if(area<.003)b.kind=pick([0,1,2,5,7,9,10,11,13,14,20,21,22,24,25,27]);
+ if(rand()<.13)b.kind=18;
+ if(b.kind===18){b.speed=Math.min(b.speed,90);b.porosity=Math.min(b.porosity,95)}
  b.scale=1+R(8);b.phase=R(900);return b;
 }
 function rgba(hex){return [parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16)]}
 function paint(b,remember){
- const colors=palettes[+el('palette').value].map(rgba),{x,y,w,h,id,gene,speed,porosity,kind,bg,fg,accent,scale,phase}=b;
+ const {x,y,w,h,id,gene,speed,porosity,kind,bg,fg,accent,scale,phase,palette}=b;
  const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d',{alpha:false});
- const hex=k=>palettes[+el('palette').value][k%6];
+ const hex=k=>palettes[palette][k%6];
  const rect=(x,y,w,h,k)=>{if(w<=0||h<=0)return;ctx.fillStyle=hex(k);ctx.fillRect(Math.floor(x),Math.floor(y),Math.ceil(w),Math.ceil(h));};
  rect(0,0,w,h,bg);
  let pitch=scale+2+R(9),line=1+R(Math.max(1,scale)),n=4+R(14);
@@ -123,7 +141,20 @@ function paint(b,remember){
  if(kind===15){let g=3+R(9);for(let j=0;j<h;j+=g){let q=Math.floor(w*(.5+.43*Math.sin(j*.023+phase)));rect(0,j,q,line,fg);rect(q,j,Math.max(1,g),g,accent)}}
  if(kind===16){let g=3+R(9);for(let i=0;i<w;i+=g){let q=Math.floor(h*(.5+.42*Math.sin(i*.021+phase)));rect(i,0,line,q,fg);if(rand()<.2)rect(i,q,g,h-q,accent)}}
  if(kind===17){let g=3+R(8);for(let j=0;j<h;j+=g)for(let i=0;i<w;i+=g){let v=Math.sin(i*.014+phase)+Math.sin(j*.018)+Math.sin((i+j)*.043);if(v>.5)rect(i,j,g-1,g-1,fg);else if(v< -1.6)rect(i,j,1,g,accent)}}
- if(rand()<.26)rect(0,0,w,1,fg);if(rand()<.22)rect(0,0,1,h,fg);
+ // 12 additional graphic structures, from nearly empty fields to microscopic woven systems.
+ if(kind===18){let v=rand()<.5?1:2;let edge=rand()<.5;for(let j=0;j<1+R(4);j++){let yy=R(h),xx=R(w);if(edge)rect(0,yy,w*(.04+rand()*.19),v,fg);else rect(xx,0,v,h*(.05+rand()*.2),accent)}}
+ if(kind===19){let n=3+R(7);for(let j=0;j<n;j++){let u=(j+1)/(n+1);let xx=Math.floor(w*u),yy=Math.floor(h*(.16+.65*rand()));rect(xx,0,1+R(4),yy,fg);rect(xx,yy,Math.max(1,w/(n*2)),1+R(3),accent)}}
+ if(kind===20){let g=3+R(6);for(let j=0;j<h;j+=g)for(let i=0;i<w;i+=g){let k=(Math.floor(i/g)+Math.floor(j/g)*3+phase)%7;if(k<5)rect(i,j,k%2?g-1:1,k%2?1:g-1,fg);if(k===6)rect(i,j,1,1,accent)}}
+ if(kind===21){let g=4+R(10);for(let j=0;j<h;j+=g){let f=Math.floor((.5+.5*Math.sin(j*.14+phase))*g);for(let i=0;i<w;i+=g)rect(i+f%g,j,1+R(2),g-1,fg)}}
+ if(kind===22){let g=3+R(7);for(let j=0;j<h;j+=g)for(let i=0;i<w;i+=g){let u=(i+j+phase)%(g*5);if(u<g*2){rect(i,j,g-1,1,fg);rect(i,j,1,g-1,fg)}else if(u<g*3)rect(i,j,2,2,accent)}}
+ if(kind===23){let g=4+R(7);let cx=w*(.28+rand()*.44),cy=h*(.25+rand()*.5);for(let j=0;j<h;j+=g)for(let i=0;i<w;i+=g){let d=Math.max(Math.abs(i-cx)/Math.max(1,w),Math.abs(j-cy)/Math.max(1,h));if(Math.floor(d*17)%3===0)rect(i,j,g-1,g-1,fg);else if(Math.floor(d*29)%11===0)rect(i,j,g-1,1,accent)}}
+ if(kind===24){let g=4+R(7);for(let j=0;j<h;j+=g)for(let i=0;i<w;i+=g){let k=(Math.floor(i/g)^Math.floor(j/g)^phase)%8;if(k<4){rect(i,j,g,1,fg);rect(i+(k%2)*(g-1),j,1,g,fg)}else if(k===7)rect(i,j,1,1,accent)}}
+ if(kind===25){let g=2+R(5);for(let j=0;j<h;j+=g){let x0=R(Math.max(1,g*3));for(let i=x0;i<w;i+=g*3){rect(i,j,Math.max(1,g-1),1,fg);if(rand()<.3)rect(i+g,j,1,g,accent)}}}
+ if(kind===26){let g=2+R(5),n=2+R(4);for(let k=0;k<n;k++){let x=Math.floor(w*(.12+rand()*.7)),y=Math.floor(h*(.12+rand()*.7));let ww=Math.max(1,Math.floor(w*(.1+rand()*.3))),hh=Math.max(1,Math.floor(h*(.1+rand()*.3)));for(let j=0;j<hh;j+=g)rect(x,y+j,ww,1,k%2?fg:accent)}}
+ if(kind===27){let g=3+R(5);for(let j=0;j<h;j+=g)for(let i=0;i<w;i+=g){let k=(Math.floor(i/g)*7+Math.floor(j/g)*11+phase)%19;if(k<11)rect(i,j,1+k%Math.max(1,g-1),1,fg);else if(k===17)rect(i,j,1,g,accent)}}
+ if(kind===28){let g=4+R(9),cut=w*(.2+rand()*.6);for(let j=0;j<h;j+=g){let bend=Math.floor(cut+Math.sin(j*.011+phase)*w*.15);rect(0,j,Math.max(1,bend),1+R(2),fg);if(j%(g*4)===0)rect(bend,j,Math.max(1,w-bend),1,accent)}}
+ if(kind===29){let n=4+R(8);for(let j=0;j<n;j++){let x=R(w),y=R(h),ww=Math.max(1,R(Math.max(2,w/2))),hh=Math.max(1,R(Math.max(2,h/2)));rect(x,y,ww,1,fg);rect(x,y,1,hh,fg);rect(x+ww-1,y+hh-1,1,1,accent)}}
+ if(rand()<.18)rect(0,0,w,1,fg);if(rand()<.22)rect(0,0,1,h,fg);
  const src=ctx.getImageData(0,0,w,h).data;
  let pix=new Uint8Array(w*h*4),mem=new Uint8Array(w*h*4),field=new Uint8Array(w*h*4);
  for(let yy=0;yy<h;yy++){
@@ -139,46 +170,58 @@ function paint(b,remember){
 function upload(tex,b,data){gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.texSubImage2D(gl.TEXTURE_2D,0,b.x,H-b.y-b.h,b.w,b.h,gl.RGBA,gl.UNSIGNED_BYTE,data)}
 function genome(b){let f=new Uint8Array(b.w*b.h*4);for(let i=0;i<f.length;i+=4){f[i]=b.id;f[i+1]=b.gene;f[i+2]=b.speed;f[i+3]=b.porosity}upload(regions,b,f)}
 function initAtlas(){
- boxes=[];let rects=[],layout=+el('layout').value;
+ boxes=[];let rects=[];
  const add=(x,y,w,h)=>{if(w>0&&h>0)rects.push({x,y,w,h})};
- function divide(b,d){if(d<=0||b.w<24||b.h<24){rects.push(b);return}let vertical=b.w/b.h>1.65?true:b.h/b.w>1.65?false:rand()<.5;let k=.21+rand()*.58;for(const q of splitBox(b,k,vertical))divide(q,d-1-(rand()<.16?1:0))}
- if(layout===0){let axis= W>H, parts=splitBox({x:0,y:0,w:W,h:H},.26+rand()*.24,axis);divide(parts[0],3+R(3));divide(parts[1],6+R(2))}
- if(layout===1){let nx=9+R(6),ny=7+R(5);for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){let x=Math.floor(i*W/nx),y=Math.floor(j*H/ny);add(x,y,Math.floor((i+1)*W/nx)-x,Math.floor((j+1)*H/ny)-y)}}
- if(layout===2){for(let y=0;y<H;){let h=Math.min(H-y,10+R(58)),n=rand()<.55?1:2+R(4);for(let i=0;i<n;i++){let x=Math.floor(i*W/n);add(x,y,Math.floor((i+1)*W/n)-x,h)}y+=h}}
+ function divide(b,d){if(d<=0||b.w<19||b.h<19){rects.push(b);return}let vertical=b.w/b.h>1.65?true:b.h/b.w>1.65?false:rand()<.5;let k=.21+rand()*.58;for(const q of splitBox(b,k,vertical))divide(q,d-1-(rand()<.16?1:0))}
+ if(layout===0){let axis= W>H, parts=splitBox({x:0,y:0,w:W,h:H},.26+rand()*.24,axis);divide(parts[0],1+R(4));divide(parts[1],6+R(3))}
+ if(layout===1){let nx=11+R(6),ny=8+R(5);for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){let x=Math.floor(i*W/nx),y=Math.floor(j*H/ny);add(x,y,Math.floor((i+1)*W/nx)-x,Math.floor((j+1)*H/ny)-y)}}
+ if(layout===2){for(let y=0;y<H;){let h=Math.min(H-y,7+R(57)),n=rand()<.55?1:2+R(4);for(let i=0;i<n;i++){let x=Math.floor(i*W/n);add(x,y,Math.floor((i+1)*W/n)-x,h)}y+=h}}
  if(layout===3){let b={x:0,y:0,w:W,h:H};let parts=splitBox(b,.38+rand()*.24,true);divide(parts[0],1+R(2));divide(parts[1],5+R(2))}
+ if(layout===4){let q=splitBox({x:0,y:0,w:W,h:H},.2+rand()*.15,false);divide(q[0],5+R(2));let z=splitBox(q[1],.4+rand()*.2,true);divide(z[0],2+R(2));divide(z[1],6+R(2))}
+ if(layout===5){let q=splitBox({x:0,y:0,w:W,h:H},.36+rand()*.22,false);divide(q[0],1+R(2));divide(q[1],7+R(2))}
  if(rects.length>250){rects=[];divide({x:0,y:0,w:W,h:H},7)}
  rects.forEach((r,i)=>{let b=styleBox(makeBox(r,i+1),true);boxes.push(b);paint(b,false)});
 }
 function freeId(){let used=new Set(boxes.map(b=>b.id));for(let i=1;i<=250;i++)if(!used.has(i))return i;return 0}
 function adjacent(a,b){return (a.y===b.y&&a.h===b.h&&(a.x+a.w===b.x||b.x+b.w===a.x))||(a.x===b.x&&a.w===b.w&&(a.y+a.h===b.y||b.y+b.h===a.y))}
-function evolve(force=false){
+function adjacentLoose(a,b){return ((a.x+a.w===b.x||b.x+b.w===a.x)&&Math.min(a.y+a.h,b.y+b.h)>Math.max(a.y,b.y))||((a.y+a.h===b.y||b.y+b.h===a.y)&&Math.min(a.x+a.w,b.x+b.w)>Math.max(a.x,b.x))}
+function mutateGene(b){b.gene=(b.gene+1+R(23))%24;b.speed=10+R(235);b.porosity=20+R(225);genome(b)}
+function evolve(){
  if(!boxes.length)return;
- let b=pick(boxes),r=rand(),event='GENOME SHIFT';
- if(r<.23&&boxes.length<220&&(b.w>=40||b.h>=40)){
+ let b=pick(boxes),r=rand();
+ if(rand()<.2)b=pick(boxes.slice().sort((a,b)=>b.w*b.h-a.w*a.h).slice(0,Math.min(10,boxes.length)));
+ let near=boxes.filter(q=>q!==b&&adjacent(b,q));
+ let adjacentAll=boxes.filter(q=>q!==b&&adjacentLoose(b,q));
+ if((r<.18||boxes.length<18&&r<.5)&&boxes.length<218&&(b.w>=40||b.h>=40)){
   let vertical=b.w>=40&&(b.h<40||b.w/b.h>1.5||rand()<.5),id=freeId();
-  if(id){let [p,q]=splitBox(b,.28+rand()*.44,vertical);let m=styleBox(makeBox(p,b.id)),n=styleBox(makeBox(q,id));boxes.splice(boxes.indexOf(b),1,m,n);paint(m,true);paint(n,true);event='CELL DIVISION'}
- }else if(r<.38&&boxes.length>9){
-  let near=boxes.filter(q=>q!==b&&adjacent(b,q));if(near.length){let q=pick(near),x=Math.min(b.x,q.x),y=Math.min(b.y,q.y),w=Math.max(b.x+b.w,q.x+q.w)-x,h=Math.max(b.y+b.h,q.y+q.h)-y;
-   let m=styleBox(makeBox({x,y,w,h},b.id));boxes=boxes.filter(z=>z!==b&&z!==q);boxes.push(m);paint(m,true);event='FUSION';
-  }else{b.gene=R(16);genome(b)}
- }else if(r<.67){styleBox(b);paint(b,true);event='RECONSTRUCTION'}
- else if(r<.88){b.gene=(b.gene+1+R(15))%16;b.speed=20+R(220);b.porosity=30+R(210);genome(b)}
- else{let near=boxes.filter(q=>q!==b&&((Math.abs(q.x-b.x)<W*.20&&Math.abs(q.y-b.y)<H*.20)||adjacent(b,q)));for(const q of near.slice(0,4)){q.gene=b.gene;q.porosity=180+R(75);genome(q)}event='CONTAGION'}
- events++;el('stats').textContent=boxes.length+' CELLS / '+events+' EVENTS / '+event;
- nextEvent=age+(force?2:2.5+rand()*8);
+  if(id){let [p,q]=splitBox(b,.24+rand()*.52,vertical);let m=styleBox(makeBox(p,b.id)),n=styleBox(makeBox(q,id));boxes.splice(boxes.indexOf(b),1,m,n);paint(m,true);paint(n,true)}
+ }else if(r<.32&&near.length&&boxes.length>12){
+  let q=pick(near),x=Math.min(b.x,q.x),y=Math.min(b.y,q.y),w=Math.max(b.x+b.w,q.x+q.w)-x,h=Math.max(b.y+b.h,q.y+q.h)-y;
+  let m=styleBox(makeBox({x,y,w,h},b.id));boxes=boxes.filter(z=>z!==b&&z!==q);boxes.push(m);paint(m,true);
+ }else if(r<.46&&near.length){
+  // Tectonic boundary migration: change ownership, but preserve every live feedback pixel.
+  let q=pick(near),x=Math.min(b.x,q.x),y=Math.min(b.y,q.y),w=Math.max(b.x+b.w,q.x+q.w)-x,h=Math.max(b.y+b.h,q.y+q.h)-y,vertical=b.y===q.y&&b.h===q.h;
+  if((vertical?w:h)>=32){let [p,n]=splitBox({x,y,w,h},.23+rand()*.54,vertical);let m={...b,...p},z={...q,...n};boxes=boxes.filter(k=>k!==b&&k!==q);boxes.push(m,z);paint(m,true);paint(z,true)}
+ }else if(r<.68){styleBox(b);paint(b,true)}
+ else if(r<.87){mutateGene(b)}
+ else if(r<.95){for(const q of adjacentAll.slice(0,5)){q.gene=(b.gene+R(3))%24;q.porosity=150+R(105);genome(q)}}
+ else if(adjacentAll.length){let q=pick(adjacentAll);let props=['gene','kind','bg','fg','accent','scale','phase','palette'];for(const k of props)q[k]=b[k];paint(q,true)}
+ events++;nextEvent=age+.7+rand()*2.8;
+ // Over minutes, migrate the artwork towards a related palette, one reconstruction at a time.
+ if(age>=nextEra){let choices=[ [0,10,6],[1,9,5],[2,11,6],[3,0,10],[4,8,2],[5,9,1],[6,7,2],[7,6,10],[8,4,11],[9,1,5],[10,0,7],[11,2,8] ];paletteIndex=pick(choices[paletteIndex]);nextEra=age+80+rand()*160;era++;}
 }
 function rebuild(change=false){
  if(change||!seed)seed=(crypto.getRandomValues(new Uint32Array(1))[0]>>>0)||1;
- rand=rng(seed);
+ rand=rng(seed);layout=pick([0,0,0,1,2,3,4,4,5]);paletteIndex=pick([0,1,2,3,4,5,6,6,7,8,9,10,11]);era=0;nextEra=80+rand()*100;
  let r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);
  canvas.width=Math.max(2,Math.round(r.width*d));canvas.height=Math.max(2,Math.round(r.height*d));
- let scale=Math.min(1,1400/canvas.width,1000/canvas.height);W=Math.max(2,Math.round(canvas.width*scale*quality));H=Math.max(2,Math.round(canvas.height*scale*quality));
+ let scale=Math.min(1,1500/canvas.width,1080/canvas.height,Math.sqrt((matchMedia('(pointer:coarse)').matches?650000:1250000)/(canvas.width*canvas.height)));W=Math.max(2,Math.round(canvas.width*scale*quality));H=Math.max(2,Math.round(canvas.height*scale*quality));
  [...targets,base,regions,archive].filter(Boolean).forEach(t=>gl.deleteTexture(t));fb.forEach(t=>gl.deleteFramebuffer(t));
  baseData=new Uint8Array(W*H*4);fieldData=new Uint8Array(W*H*4);memoryData=new Uint8Array(W*H*4);initAtlas();
  base=texture(baseData);regions=texture(fieldData);archive=texture(memoryData);
  let initial=baseData.slice();for(let i=3;i<initial.length;i+=4)initial[i]=0;
  targets=[texture(initial),texture(initial)];fb=targets.map(t=>{let a=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,a);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('Framebuffer incomplete');return a});
- read=0;step=0;acc=0;last=0;age=0;epoch=0;events=0;nextEvent=3+rand()*4;el('seed').textContent='SEED '+seed+' / '+W+'×'+H;el('stats').textContent=boxes.length+' CELLS / GERMINATION';draw();
+ read=0;step=0;acc=0;last=0;age=0;epoch=0;events=0;nextEvent=1+rand()*3;draw();
 }
 function mutate(){
  gl.useProgram(sim);gl.bindFramebuffer(gl.FRAMEBUFFER,fb[1-read]);gl.viewport(0,0,W,H);
@@ -188,8 +231,7 @@ function mutate(){
 }
 function draw(){gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.useProgram(show);bind(targets[read],0,du.tex);gl.uniform2f(du.view,canvas.width,canvas.height);gl.drawArrays(gl.TRIANGLES,0,3);}
 function frame(now){let dt=last?Math.min(now-last,100):0;last=now;if(!paused&&!document.hidden){age+=dt/1000;if(age>=nextEvent)evolve();acc=Math.min(acc+dt,100);let n=0;while(acc>=1000/30&&n<2){mutate();acc-=1000/30;n++;}if(n)draw()}requestAnimationFrame(frame)}
-el('new').onclick=()=>rebuild(true);el('evolve').onclick=()=>{evolve(true);if(paused){mutate();draw()}};el('hide').onclick=()=>document.querySelector('main').classList.add('clean');canvas.addEventListener('dblclick',()=>document.querySelector('main').classList.toggle('clean'));document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelector('main').classList.remove('clean');if(e.key==='h')document.querySelector('main').classList.toggle('clean')});el('layout').onchange=()=>rebuild(false);el('palette').onchange=()=>rebuild(false);el('pause').onclick=()=>{paused=!paused;el('pause').textContent=paused?'Resume':'Pause';};el('full').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else if(canvas.requestFullscreen)canvas.requestFullscreen().catch(e=>el('err').textContent=e.message);else el('err').textContent='Fullscreen not supported';};
 let timer;new ResizeObserver(()=>{clearTimeout(timer);timer=setTimeout(()=>{let r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);let w=Math.max(2,Math.round(r.width*d)),h=Math.max(2,Math.round(r.height*d));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;draw()}},80)}).observe(canvas);
-canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();paused=true;el('err').textContent='GPU context lost. Reload to restart.'});
+canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();paused=true;el('err').textContent='Graphics context lost. Reload to restart.'});
 try{rebuild(true);requestAnimationFrame(frame)}catch(e){el('err').textContent=e.message;throw e}
 </script></html>
