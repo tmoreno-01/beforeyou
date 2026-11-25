@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Beforeyou / Residue 001</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#101010;color:#eee;font:12px/1.4 monospace}main{height:100dvh;display:flex;flex-direction:column;padding:10px;gap:9px}header,footer{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}header b{font-size:13px;letter-spacing:.08em}button,select{font:inherit;color:inherit;background:#171717;border:1px solid #444;padding:6px 9px;cursor:pointer}canvas{width:100%;height:100%;min-height:0;flex:1;display:block;image-rendering:pixelated;background:#101010}canvas:fullscreen{width:100vw;height:100vh}#err{color:#f88}#seed{color:#aaa}footer{color:#999}#controls{display:flex;gap:5px;flex-wrap:wrap}</style>
+<main><header><b>BEFOREYOU / RESIDUE 001</b><div id="controls"><select id="layout" aria-label="Composition"><option value="0">Fault lines</option><option value="1">Mosaic</option><option value="2">Strata</option></select><select id="palette" aria-label="Palette"><option value="0">Acid / ink</option><option value="1">Cobalt / paper</option><option value="2">Signal red</option><option value="3">Phosphor</option></select><button id="new">New seed</button><button id="pause">Pause</button><button id="full">Fullscreen</button></div></header><canvas id="art"></canvas><footer><span id="seed"></span><span>STATEFUL PIXEL SYSTEM / WEBGL2</span><span id="err"></span></footer></main>
+<script>
+'use strict';
+const canvas=document.getElementById('art'), el=id=>document.getElementById(id);
+const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,stencil:false,preserveDrawingBuffer:false});
+if(!gl){el('err').textContent='WebGL2 unavailable in this browser.';throw Error('WebGL2 unavailable')}
+let W,H,seed=0,step=0,paused=false,targets=[],fb=[],base,regions,read=0,last=0,acc=0;
+const vs=`#version 300 es
+void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.-1.,0.,1.);}`;
+const fs=`#version 300 es
+precision highp float;precision highp int;
+uniform sampler2D prev,original,field;
+uniform ivec2 dim;uniform int tick;uniform float key;
+out vec4 outColor;
+float hash(vec2 p){vec3 q=fract(vec3(p.xyx)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
+ivec2 clampP(ivec2 p){return clamp(p,ivec2(0),dim-1);}
+vec4 get(sampler2D t,ivec2 p){return texelFetch(t,clampP(p),0);}
+void main(){
+ ivec2 p=ivec2(gl_FragCoord.xy);
+ vec4 m=get(field,p);int id=int(round(m.r*255.));int mode=int(round(m.g*255.));float speed=m.b;
+ vec2 z=vec2(p);float t=float(tick);float r=float(id)+key;
+ vec4 old=get(prev,p), home=get(original,p);
+ float beat=floor(t/(3.+floor(speed*15.)));
+ float phase=hash(vec2(r, floor(t/180.)));
+ float row=hash(vec2(floor(z.y/(1.+floor(speed*8.))),r));
+ float col=hash(vec2(floor(z.x/(1.+floor(speed*6.))),r+9.));
+ int dx=row>.5?1:-1,dy=col>.5?1:-1;
+ ivec2 q=p;float gate=0.;
+ if(mode==0){q+=ivec2(dx*(1+int(speed*4.)),0);gate=step(.62,fract(z.y/(9.+speed*33.)+phase));}
+ if(mode==1){q+=ivec2(0,dy*(1+int(speed*3.)));gate=step(.47,fract(z.x/(7.+speed*37.)+phase));}
+ if(mode==2){float a=hash(floor(z/(5.+speed*17.))+r);q+=a>.5?ivec2(dx,0):ivec2(0,dy);gate=step(.26,a);}
+ if(mode==3){float a=sin(z.x*.035+sin(z.y*.026+t*.009)*3.+r)+sin(z.y*.041-t*.012);q+=abs(a)>.75?ivec2(dx*2,0):ivec2(0,dy);gate=step(-.25,a);}
+ if(mode==4){int a=int(mod(floor(z.x/8.)+floor(z.y/8.)+beat,2.));q+=a==0?ivec2(dx*3,0):ivec2(0,dy*2);gate=step(.28,hash(floor(z/8.)+r));}
+ if(mode==5){float a=hash(vec2(floor(z.y/2.),beat+r));q+=ivec2(int(floor(a*13.))-6,0);gate=step(.68,row);}
+ if(mode==6){q+=ivec2(dx,dy);gate=step(.55,hash(floor(z/3.)+r));}
+ if(mode==7){q+=ivec2(dx*(1+int(speed*7.)),0);gate=step(.35,fract(z.y/(3.+speed*12.)+phase));}
+ float pulse=hash(vec2(r,floor(t/(45.+speed*100.))));
+ if(pulse<.13)gate=0.;
+ vec4 v=old;
+ if(gate>.5 && int(round(get(field,q).r*255.))==id) v=get(prev,q);
+ // A repair front traverses each region independently; sparse stochastic repair preserves the palette.
+ float repair=hash(z+vec2(t*17.,r*13.));
+ float sweep=fract((mode==1?z.x:z.y)/(35.+speed*120.)-t*(.001+speed*.003)+phase);
+ if(repair<.012+speed*.019 || (sweep<.035 && repair<.48))v=home;
+ // Rare local transfer changes the state without injecting arbitrary RGB noise.
+ if(pulse>.94 && repair<.10){ivec2 n=p+ivec2(dx*7,dy*3);if(int(round(get(field,n).r*255.))==id)v=get(original,n);}
+ outColor=vec4(v.rgb,1.);
+}`;
+const display=`#version 300 es
+precision highp float;uniform sampler2D tex;uniform vec2 viewSize;out vec4 outColor;void main(){outColor=texture(tex,gl_FragCoord.xy/viewSize);}`;
+function program(f){function sh(type,src){let s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}let p=gl.createProgram();let a=sh(gl.VERTEX_SHADER,vs),b=sh(gl.FRAGMENT_SHADER,f);gl.attachShader(p,a);gl.attachShader(p,b);gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));gl.deleteShader(a);gl.deleteShader(b);return p}
+const sim=program(fs),show=program(display),vao=gl.createVertexArray();gl.bindVertexArray(vao);
+const U=(p,n)=>gl.getUniformLocation(p,n);
+const su=Object.fromEntries(['prev','original','field','dim','tick','key'].map(n=>[n,U(sim,n)])),du={tex:U(show,'tex'),view:U(show,'viewSize')};
+function texture(data){let a=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,a);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,data);return a}
+function bind(t,i,u){gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_2D,t);gl.uniform1i(u,i)}
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let x=Math.imul(s^s>>>15,1|s);x=x+Math.imul(x^x>>>7,61|x)^x;return((x^x>>>14)>>>0)/4294967296}}
+const palettes=[['#101010','#e7e2ce','#c5ff00','#445b00','#6b6e63','#fc6b35'],['#101b44','#f2eee3','#214cff','#7c94ea','#131315','#e2aa56'],['#111113','#eee9e5','#ff3150','#822036','#77757b','#f7ac9c'],['#131a16','#f1eada','#00e6b0','#1c735b','#738077','#d5bd69']];
+function make(){
+ let rand=rng(seed),R=n=>Math.floor(rand()*n),layout=+el('layout').value,colors=palettes[+el('palette').value];
+ let c=document.createElement('canvas');c.width=W;c.height=H;let ctx=c.getContext('2d',{alpha:false});ctx.imageSmoothingEnabled=false;
+ let f=new Uint8Array(W*H*4),boxes=[];
+ function split(x,y,w,h,d){if(d<=0||w<34||h<30){boxes.push([x,y,w,h]);return}let horiz=w/h>1.65?true:h/w>1.65?false:rand()<.5;let n=horiz?w:h;let a=Math.max(12,Math.min(n-12,Math.round(n*(.24+rand()*.52))));if(horiz){split(x,y,a,h,d-1);split(x+a,y,w-a,h,d-1)}else{split(x,y,w,a,d-1);split(x,y+a,w,h-a,d-1)}}
+ if(layout===0)split(0,0,W,H,6);
+ if(layout===1){let nx=11+R(4),ny=8+R(4);for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){let x=Math.floor(i*W/nx),y=Math.floor(j*H/ny);boxes.push([x,y,Math.floor((i+1)*W/nx)-x,Math.floor((j+1)*H/ny)-y])}}
+ if(layout===2){let y=0;while(y<H){let h=Math.min(H-y,6+R(45));let n=rand()<.6?1:2+R(4);for(let i=0;i<n;i++){let x=Math.floor(i*W/n);boxes.push([x,y,Math.floor((i+1)*W/n)-x,h])}y+=h}}
+ // Keep ID within 8 bits even on unusual dimensions.
+ if(boxes.length>250)boxes=boxes.slice(0,250);
+ ctx.fillStyle=colors[0];ctx.fillRect(0,0,W,H);
+ boxes.forEach(([x,y,w,h],i)=>{
+ let id=i+1,mode=R(8),speed=30+R(210),bg=rand()<.54?0:rand()<.55?1:2,fg=bg===0?(rand()<.45?1:2):0;
+ const rect=(a,b,c,d,k)=>{ctx.fillStyle=colors[k%colors.length];ctx.fillRect(Math.floor(a),Math.floor(b),Math.ceil(c),Math.ceil(d))};
+ for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++){let k=((H-1-yy)*W+xx)*4;f[k]=id;f[k+1]=mode;f[k+2]=speed;f[k+3]=255}
+ ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();rect(x,y,w,h,bg);
+ let kind=R(10),s=1+R(7),a=2+R(9);
+ if(kind===0||kind===1){for(let j=0;j<(kind===0?h:w);j+=s+a){if(kind===0)rect(x,y+j,w,s,fg);else rect(x+j,y,s,h,fg)}}
+ else if(kind===2){for(let j=0;j<h;j+=s+a)for(let k=0;k<w;k+=s+a)if((Math.floor(j/(s+a))+Math.floor(k/(s+a)))%2===0)rect(x+k,y+j,s,s,fg)}
+ else if(kind===3||kind===4){let n=3+R(11);for(let j=0;j<n;j++){let xx=R(w),yy=R(h);rect(x+xx,y+yy,Math.max(1,R(w-xx+1)),Math.max(1,R(h-yy+1)),rand()<.7?fg:2+R(4));}}
+ else if(kind===5){for(let j=0;j<h;j+=3+R(4)){let xx=0;while(xx<w){let len=2+R(23);rect(x+xx,y+j,len,1+R(2),rand()<.5?fg:2+R(3));xx+=len+2+R(12)}}}
+ else if(kind===6){for(let j=0;j<Math.min(w,h)/2;j+=4+R(4)){rect(x+j,y+j,w-2*j,1,fg);rect(x+j,y+j,1,h-2*j,fg);rect(x+j,y+h-j-1,w-2*j,1,fg);rect(x+w-j-1,y+j,1,h-2*j,fg)}}
+ else if(kind===7){for(let j=0;j<h;j+=5){for(let k=0;k<w;k+=5){if(rand()<.72){rect(x+k,y+j,1+R(4),1+R(4),rand()<.75?fg:2+R(4));}}}}
+ else if(kind===8){for(let j=0;j<h;j+=4+R(6)){rect(x,y+j,w*(.15+rand()*.85),1+R(3),fg);}}
+ else{let b=2+R(8);rect(x+b,y+b,Math.max(1,w-2*b),Math.max(1,h-2*b),fg);rect(x+b*2,y+b*2,Math.max(1,w-4*b),Math.max(1,h-4*b),bg);}
+ if(rand()<.55)rect(x,y,w,1,0);if(rand()<.45)rect(x,y,1,h,0);
+ ctx.restore();
+ });
+ let raw=ctx.getImageData(0,0,W,H).data, pixels=new Uint8Array(raw.length);for(let y=0;y<H;y++)pixels.set(raw.subarray(y*W*4,(y+1)*W*4),(H-1-y)*W*4);
+ return [pixels,f];
+}
+function rebuild(change=false){if(change||!seed)seed=(crypto.getRandomValues(new Uint32Array(1))[0]>>>0)||1;
+ let r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);canvas.width=Math.max(2,Math.round(r.width*d));canvas.height=Math.max(2,Math.round(r.height*d));
+ let scale=Math.min(1,1550/canvas.width,1100/canvas.height);W=Math.max(2,Math.round(canvas.width*scale));H=Math.max(2,Math.round(canvas.height*scale));
+ [...targets,base,regions].filter(Boolean).forEach(t=>gl.deleteTexture(t));fb.forEach(t=>gl.deleteFramebuffer(t));let [pixels,field]=make();base=texture(pixels);regions=texture(field);targets=[texture(pixels),texture(pixels)];fb=targets.map(t=>{let a=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,a);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('Framebuffer incomplete');return a});read=0;step=0;acc=0;last=0;el('seed').textContent='SEED '+seed+' / '+W+'×'+H;draw();}
+function mutate(){gl.useProgram(sim);gl.bindFramebuffer(gl.FRAMEBUFFER,fb[1-read]);gl.viewport(0,0,W,H);bind(targets[read],0,su.prev);bind(base,1,su.original);bind(regions,2,su.field);gl.uniform2i(su.dim,W,H);gl.uniform1i(su.tick,++step);gl.uniform1f(su.key,seed%997);gl.drawArrays(gl.TRIANGLES,0,3);read=1-read;}
+function draw(){gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.useProgram(show);bind(targets[read],0,du.tex);gl.uniform2f(du.view,canvas.width,canvas.height);gl.drawArrays(gl.TRIANGLES,0,3);}
+function frame(now){let dt=last?Math.min(now-last,100):0;last=now;if(!paused&&!document.hidden){acc+=dt;let n=0;while(acc>=1000/30&&n<3){mutate();acc-=1000/30;n++;}if(n)draw()}requestAnimationFrame(frame)}
+el('new').onclick=()=>rebuild(true);el('layout').onchange=()=>rebuild(false);el('palette').onchange=()=>rebuild(false);el('pause').onclick=()=>{paused=!paused;el('pause').textContent=paused?'Resume':'Pause';};el('full').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else if(canvas.requestFullscreen)canvas.requestFullscreen().catch(e=>el('err').textContent=e.message);else el('err').textContent='Fullscreen not supported';};
+let timer;new ResizeObserver(()=>{clearTimeout(timer);timer=setTimeout(()=>rebuild(false),160)}).observe(canvas);
+canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();paused=true;el('err').textContent='GPU context lost. Reload to restart.'});
+rebuild(true);requestAnimationFrame(frame);
+</script></html>
