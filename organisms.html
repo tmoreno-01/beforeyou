@@ -42,7 +42,7 @@ function flow(x,y){
  return Math.atan2(fy,fx);
 }
 function node(x,y,tribe=0,kind=0,cluster=-1){
- const n={id:++nodeID,x:clamp(x,.015,.985),y:clamp(y,.015,.985),px:x,py:y,vx:between(-.0004,.0004),vy:between(-.0004,.0004),tribe,kind,cluster,phase:random()*TAU,age:0,life:between(180,900),mass:between(.6,1.6),energy:between(.5,1.5),alive:true};
+ const n={id:++nodeID,x:clamp(x,.015,.985),y:clamp(y,.015,.985),px:x,py:y,vx:between(-.00005,.00005),vy:between(-.00005,.00005),tribe,kind,cluster,phase:random()*TAU,age:0,life:between(180,900),mass:between(.6,1.6),energy:between(.5,1.5),alive:true};
  nodes.push(n);nodeById.set(n.id,n);return n;
 }
 function edge(a,b,kind=0,tribe=a.tribe){
@@ -88,7 +88,7 @@ function initial(){
   for(let i=0;i<24;i++){const a=pick(c.hull.map(get)),b=pick(nodes.filter(n=>n.cluster!==c.id));edge(a,b,2+R(2))}
   for(let i=0;i<20;i++)connectTree(pick(c.hull.map(get)),2+R(2),R(4),random()*TAU,1.2);
  }else if(study==='civilisation'){
-  seedCluster(.22,.26,.16,.19,0,'tree',20);seedCluster(.75,.24,.15,.18,1,'radial',20);seedCluster(.26,.75,.16,.17,2,'mesh',20);seedCluster(.76,.75,.17,.17,3,'fold',20);
+  seedCluster(.19,.31,.17,.19,0,'tree',21);seedCluster(.78,.19,.14,.16,1,'radial',18);seedCluster(.68,.73,.18,.17,2,'mesh',22);seedCluster(.28,.82,.13,.14,3,'fold',17);
   for(let i=0;i<12;i++){const a=pick(clusters[i%4].hull.map(get)),b=pick(clusters[(i+1)%4].hull.map(get));edge(a,b,2)}
  }else if(study==='impossible'){
   const c=seedCluster(.50,.50,.31,.30,0,'fold',34);
@@ -249,7 +249,7 @@ function updateNodes(dt){
   const angle=flow(n.x*W,n.y*H),fx=Math.cos(angle),fy=Math.sin(angle),neighbours=adjacency.get(n.id)||[];let sx=0,sy=0;
   for(const m of neighbours){sx+=(m.x-n.x);sy+=(m.y-n.y)}
   if(neighbours.length){sx=sx/neighbours.length;sx-=0;sy=sy/neighbours.length}
-  const spring=.000075,drift=.00012;
+  const spring=.000014,drift=.000008;
   n.vx=n.vx*.965+fx*drift+sx*spring+Math.sin(t*.4+n.phase)*.000018;
   n.vy=n.vy*.965+fy*drift+sy*spring+Math.cos(t*.33+n.phase)*.000018;
   n.x+=n.vx*dt60;n.y+=n.vy*dt60;
@@ -262,7 +262,7 @@ function grow(){
  if(nodes.length>260)return;
  if(study==='civilisation')civilisationEvent();
  else if(study==='impossible'){if(random()<.55)scaleMigration();else foldEvent()}
- else if(study==='extinction'){if(random()<.62)collapseEvent();else{const n=pick(nodes.filter(n=>n.alive));if(n)for(let i=0;i<3;i++)addOffshoot(n,random()*TAU,n.tribe)}}
+ else if(study==='extinction'){if(random()<.22)collapseEvent();else{const n=pick(nodes.filter(n=>n.alive));if(n)for(let i=0;i<3+R(4);i++)addOffshoot(n,random()*TAU,n.tribe)}}
  else misreadEvent();
 }
 function update(dt){
@@ -276,7 +276,7 @@ function update(dt){
  if(t>=nextVortex){const v=pick(vortices);v.x=between(W*.08,W*.92);v.y=between(H*.08,H*.92);v.r=between(S*.04,S*.2);v.power=between(-.9,.9);nextVortex=t+between(4,16)}
  if(t>=nextMemory){memories.push({t,frame:frameNo});if(memories.length>6)memories.shift();nextMemory=t+between(15,35)}
  for(const e of edges){if(e.pigment&&t>=e.pigment.end)e.pigment=null;if(e.alive!==false)e.age+=dt}
- if(study==='extinction'&&t>8&&random()<dt*.12)collapseEvent();
+ if(study==='extinction'&&t>8&&random()<dt*.035)collapseEvent();
  if(study==='civilisation'&&t>12&&random()<dt*.15){const a=pick(clusters),b=pick(clusters.filter(c=>c!==a));if(a&&b){const x=pick(a.hull.map(get)),y=pick(b.hull.map(get));edge(x,y,2);a.power+=.05;b.power-=.03}}
  nodes=nodes.filter(n=>n.alive||n.age<200);prune();
  drawCurrent();
