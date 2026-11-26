@@ -489,7 +489,7 @@ function updateAgents(){
   if(a.x<.01||a.x>.99||a.y<.01||a.y>.99){a.angle+=Math.PI*(.65+rand()*.7);a.x=clamp(a.x,.01,.99);a.y=clamp(a.y,.01,.99)}
   if(rand()<.018+obsession*.035)a.target=null;
   const x=oldX*N,y=oldY*N,xx=a.x*N,yy=a.y*N;
-  c.save();c.globalAlpha=.28+rand()*.48;c.lineWidth=.65+rand()*2.1;c.lineCap=pick(['square','butt']);c.strokeStyle=a.role===6&&rand()<.13?pick(palettes[4+R(5)]):pick(['#101010','#101010','#f5f5f2']);c.beginPath();c.moveTo(x,y);
+  c.save();c.globalAlpha=.28+rand()*.48;c.lineWidth=.65+rand()*2.1;c.lineCap=pick(['square','butt']);c.strokeStyle=a.role===6&&rand()<.13?palettes[4+R(5)][2]:pick(['#101010','#101010','#f5f5f2']);c.beginPath();c.moveTo(x,y);
   if(a.role===5||a.role===7){let mx=(x+xx)*.5+Math.cos(a.angle+1.1)*N*(.002+rand()*.012),my=(y+yy)*.5+Math.sin(a.angle+1.1)*N*(.002+rand()*.012);c.lineTo(mx,my)}
   c.lineTo(xx,yy);c.stroke();
   if(rand()<.14){let z=2+rand()*8;c.beginPath();c.moveTo(xx-z,yy);c.lineTo(xx-z,yy-z);c.lineTo(xx+z*.6,yy-z);c.lineTo(xx+z*.6,yy+z*.5);c.stroke()}
