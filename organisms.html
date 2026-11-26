@@ -49,7 +49,7 @@ function edge(a,b,kind=0,tribe=a.tribe){
  if(!a||!b||a===b)return null;
  if(edges.some(e=>(e.a===a.id&&e.b===b.id)||(e.a===b.id&&e.b===a.id)))return null;
  const dx=(b.x-a.x)*W,dy=(b.y-a.y)*H,d=Math.hypot(dx,dy);
- const e={id:++edgeID,a:a.id,b:b.id,kind,tribe,width:between(.65,3.5),bend:between(-.22,.22),rest:d,phase:random()*TAU,age:0,life:between(280,1500),strain:between(.5,1.5),pigment:null,scar:0};
+ const e={id:++edgeID,a:a.id,b:b.id,kind,tribe,width:between(.0007,.0027),bend:between(-.22,.22),rest:d,phase:random()*TAU,age:0,life:between(280,1500),strain:between(.5,1.5),pigment:null,scar:0};
  edges.push(e);return e;
 }
 function get(id){return nodeById.get(id)}
@@ -111,7 +111,7 @@ function curvePoint(p,u){const v=1-u;return [v*v*p.ax+2*v*u*p.cx+u*u*p.bx,v*v*p.
 function drawEdge(c,e,ghost=false){
  const a=get(e.a),b=get(e.b);if(!a||!b)return;
  const tribe=e.tribe%4,base=tribe===0||tribe===2?ink:ink,alpha=ghost?.18:.82;
- const p=drawCurve(c,a,b,e,alpha),w=Math.max(.7,e.width*(ghost?.6:1)*(1+.22*Math.sin(t*1.7+e.phase)));
+ const p=drawCurve(c,a,b,e,alpha),w=Math.max(.7,e.width*S*(ghost?.6:1)*(1+.22*Math.sin(t*1.7+e.phase)));
  c.strokeStyle=base;c.lineWidth=w;c.lineCap=e.kind===1?'square':'round';c.lineJoin='miter';c.stroke();
  if(e.kind===0||e.kind===2){
   c.beginPath();c.moveTo(p.ax+p.nx*w*.24,p.ay+p.ny*w*.24);c.quadraticCurveTo(p.cx+p.nx*w*.24,p.cy+p.ny*w*.24,p.bx+p.nx*w*.24,p.by+p.ny*w*.24);c.strokeStyle=paper;c.lineWidth=Math.max(.45,w*.17);c.stroke();
@@ -140,21 +140,18 @@ function drawNode(c,n,ghost=false){
  c.restore();
 }
 function membrane(c,cl){
- const list=cl.hull.map(get).filter(Boolean);if(list.length<4)return;
+ const list=cl.hull.map(get).filter(n=>n&&n.alive);if(list.length<4)return;
  const cx=cl.cx*W,cy=cl.cy*H,ordered=list.slice().sort((a,b)=>Math.atan2(a.y-cl.cy,a.x-cl.cx)-Math.atan2(b.y-cl.cy,b.x-cl.cx));
- c.save();c.beginPath();
- for(let i=0;i<ordered.length;i++){const a=ordered[i],b=ordered[(i+1)%ordered.length],mx=(a.x+b.x)*W*.5,my=(a.y+b.y)*H*.5;if(i===0)c.moveTo(mx,my);c.quadraticCurveTo(a.x*W,a.y*H,mx,my)}
- c.closePath();c.fillStyle=cl.tribe%2===0?ink:'#252525';c.globalAlpha=.92;c.fill();c.clip();
- const gap=Math.max(4,S*.009),ang=cl.phase;
- c.strokeStyle=chalk;c.globalAlpha=.58;c.lineWidth=Math.max(.6,S*.0008);
- for(let d=-S;d<S;d+=gap){c.beginPath();c.moveTo(cx-S,d+cy);c.lineTo(cx+S,d+cy+S*.27);c.stroke()}
- c.globalAlpha=.95;c.strokeStyle=paper;c.lineWidth=Math.max(1,S*.0014);
- for(let i=0;i<ordered.length;i+=3){const n=ordered[i];c.beginPath();c.moveTo(n.x*W,n.y*H);c.lineTo(cx+(n.x*W-cx)*.48,cy+(n.y*H-cy)*.48);c.stroke()}
- c.restore();
- // A few negative cuts turn the membrane into a constructed, broken material.
- c.save();c.translate(cx,cy);c.rotate(ang);c.fillStyle=paper;
- for(let i=0;i<3;i++){let x=between(-cl.rx*W*.42,cl.rx*W*.42),y=between(-cl.ry*H*.4,cl.ry*H*.4),w=between(S*.012,S*.045);c.fillRect(x,y,w,w*.12);c.fillRect(x,y,w*.12,w*.8)}
- c.restore();
+ function smoothPath(items){c.beginPath();for(let i=0;i<items.length;i++){const a=items[i],b=items[(i+1)%items.length],mx=(a.x+b.x)*W*.5,my=(a.y+b.y)*H*.5;if(i===0)c.moveTo(mx,my);c.quadraticCurveTo(a.x*W,a.y*H,mx,my)}c.closePath()}
+ c.save();smoothPath(ordered);c.fillStyle=cl.tribe%3===1?'#292929':ink;c.globalAlpha=.94;c.fill();c.clip();
+ c.save();c.translate(cx,cy);c.rotate(cl.phase+t*.012);
+ const gap=Math.max(4,S*.011);c.strokeStyle=chalk;c.globalAlpha=.58;c.lineWidth=Math.max(.6,S*.0008);
+ for(let d=-S;d<S;d+=gap){c.beginPath();c.moveTo(-S,d);c.lineTo(S,d+S*.22);c.stroke()}
+ for(let i=0;i<18;i++){const x=between(-cl.rx*W*.7,cl.rx*W*.7),y=between(-cl.ry*H*.7,cl.ry*H*.7),z=between(S*.008,S*.035);c.strokeStyle=chalk;c.lineWidth=Math.max(.7,S*.001);c.beginPath();c.moveTo(x,y);c.lineTo(x+z,y);c.lineTo(x+z,y+z*.6);c.stroke()}
+ c.restore();c.restore();
+ const inner=cl.inner.map(get).filter(n=>n&&n.alive).sort((a,b)=>Math.atan2(a.y-cl.cy,a.x-cl.cx)-Math.atan2(b.y-cl.cy,b.x-cl.cx));
+ if(inner.length>4){c.save();smoothPath(inner);c.fillStyle=paper;c.fill();c.strokeStyle=ink;c.lineWidth=Math.max(1,S*.0013);c.stroke();c.clip();c.strokeStyle='#252525';c.lineWidth=Math.max(.5,S*.0007);for(let i=0;i<24;i++){let x=between(cx-cl.rx*W*.35,cx+cl.rx*W*.35),y=between(cy-cl.ry*H*.35,cy+cl.ry*H*.35);c.beginPath();c.moveTo(x,y);c.lineTo(x+between(S*.008,S*.045),y+between(-S*.015,S*.015));c.stroke()}c.restore()}
+ c.save();c.translate(cx,cy);c.rotate(cl.phase);c.strokeStyle=paper;c.lineWidth=Math.max(1,S*.0015);for(let i=0;i<4;i++){let x=between(-cl.rx*W*.45,cl.rx*W*.45),y=between(-cl.ry*H*.45,cl.ry*H*.45),z=between(S*.012,S*.04);c.beginPath();c.moveTo(x,y);c.lineTo(x+z,y);c.lineTo(x+z,y+z*.6);c.stroke()}c.restore();
 }
 function drawCurrent(){
  liveCtx.clearRect(0,0,W,H);
@@ -206,14 +203,14 @@ function misreadEvent(){
  n.kind=pick([0,1,3]);eventCount++;
 }
 function civilisationEvent(){
- const cl=pick(clusters),tribe=cl.tribe,front=pick(cl.hull.map(get).filter(Boolean));if(!front)return;
+ const cl=pick(clusters),tribe=cl.tribe,front=pick(cl.hull.map(get).filter(n=>n&&n.alive));if(!front)return;
  const angle=Math.atan2(front.y-cl.cy,front.x-cl.cx)+between(-.7,.7),n=addOffshoot(front,angle,tribe);
  if(random()<.55){const enemy=nearest(n);if(enemy&&enemy.tribe!==tribe&&Math.hypot((enemy.x-n.x)*W,(enemy.y-n.y)*H)<S*.14){edge(n,enemy,2);if(random()<.3){n.tribe=enemy.tribe;cl.tribe=pick([tribe,enemy.tribe]);cl.phase+=between(-1,1)}}}
  cl.power=clamp(cl.power+between(-.08,.12),.3,1.8);cl.age++;
  if(random()<.18){const f=pick(nodes.filter(m=>m.tribe===tribe));if(f){f.tribe=R(4);f.kind=R(4)}}
 }
 function foldEvent(){
- const cl=pick(clusters),ids=new Set(cl.hull.concat(cl.inner)),members=nodes.filter(n=>n.cluster===cl.id||ids.has(n.id));if(!members.length)return;
+ const cl=pick(clusters),ids=new Set(cl.hull.concat(cl.inner)),members=nodes.filter(n=>n.alive&&(n.cluster===cl.id||ids.has(n.id)));if(!members.length)return;
  const cx=members.reduce((v,n)=>v+n.x,0)/members.length,cy=members.reduce((v,n)=>v+n.y,0)/members.length,angle=pick([-.9,-.55,.55,.9,Math.PI/2]),scale=between(.72,1.28),mirror=random()<.3?-1:1;
  for(const n of members){let x=(n.x-cx)*mirror,y=n.y-cy,xx=x*Math.cos(angle)-y*Math.sin(angle),yy=x*Math.sin(angle)+y*Math.cos(angle);n.x=clamp(cx+xx*scale,.02,.98);n.y=clamp(cy+yy*scale,.02,.98);n.vx+=between(-.001,.001);n.vy+=between(-.001,.001)}
  for(let i=0;i<5;i++){const a=pick(members),b=pick(members);edge(a,b,R(4))}
@@ -229,7 +226,7 @@ function collapseEvent(){
  eventCount++;
 }
 function scaleMigration(){
- const cl=pick(clusters),members=nodes.filter(n=>n.cluster===cl.id);if(!members.length)return;
+ const cl=pick(clusters),members=nodes.filter(n=>n.alive&&n.cluster===cl.id);if(!members.length)return;
  const cx=cl.cx,cy=cl.cy,scale=between(.65,1.75);
  for(const n of members){n.x=clamp(cx+(n.x-cx)*scale,.01,.99);n.y=clamp(cy+(n.y-cy)*scale,.01,.99);n.kind=R(4)}
  const root=pick(members);for(let i=0;i<3;i++)addOffshoot(root,random()*TAU,root.tribe);
@@ -238,7 +235,7 @@ function pigmentEvent(){
  const e=pick(edges.filter(e=>e.alive!==false));if(!e)return;
  const color=pick(pigments),start=t,end=t+between(5,22);e.pigment={color,start,end};
  for(const other of edges){if(other===e||random()>.12)continue;if(other.tribe===e.tribe)other.pigment={color,start:t,end:t+between(3,11)}}
- const a=get(e.a),b=get(e.b);if(a&&b){pigmentCtx.save();pigmentCtx.globalAlpha=.8;pigmentCtx.strokeStyle=color;pigmentCtx.lineWidth=between(2,8);pigmentCtx.beginPath();pigmentCtx.moveTo(a.x*W,a.y*H);pigmentCtx.lineTo(b.x*W,b.y*H);pigmentCtx.stroke();pigmentCtx.restore()}
+ const a=get(e.a),b=get(e.b);if(a&&b){const mx=(a.x+b.x)*W*.5,my=(a.y+b.y)*H*.5;pigmentCtx.save();pigmentCtx.globalAlpha=.82;pigmentCtx.strokeStyle=color;pigmentCtx.lineWidth=between(2,8);pigmentCtx.beginPath();pigmentCtx.moveTo(a.x*W,a.y*H);pigmentCtx.lineTo(b.x*W,b.y*H);pigmentCtx.stroke();for(let i=0;i<24;i++){let an=random()*TAU,d=between(S*.004,S*.045),x=mx+Math.cos(an)*d,y=my+Math.sin(an)*d;pigmentCtx.lineWidth=between(.7,2.5);pigmentCtx.beginPath();pigmentCtx.moveTo(x,y);pigmentCtx.lineTo(x+Math.cos(an+between(-1,1))*between(2,10),y+Math.sin(an+between(-1,1))*between(2,10));pigmentCtx.stroke()}pigmentCtx.restore()}
  activePigments.push({x:(get(e.a).x+get(e.b).x)*.5,y:(get(e.a).y+get(e.b).y)*.5,r:between(.04,.14),color,start,end});if(activePigments.length>8)activePigments.shift();
 }
 function rareEvent(){
@@ -248,11 +245,11 @@ function rareEvent(){
 function updateNodes(dt){
  const dt60=dt*60;
  const adjacency=new Map();for(const e of edges){if(e.alive===false)continue;let a=get(e.a),b=get(e.b);if(!a||!b)continue;if(!adjacency.has(a.id))adjacency.set(a.id,[]);if(!adjacency.has(b.id))adjacency.set(b.id,[]);adjacency.get(a.id).push(b);adjacency.get(b.id).push(a)}
- for(const n of nodes){if(!n.alive)continue;n.px=n.x;n.py=n.y;n.age+=dt;
+ for(const n of nodes){if(!n.alive){n.age+=dt;continue}n.px=n.x;n.py=n.y;n.age+=dt;
   const angle=flow(n.x*W,n.y*H),fx=Math.cos(angle),fy=Math.sin(angle),neighbours=adjacency.get(n.id)||[];let sx=0,sy=0;
   for(const m of neighbours){sx+=(m.x-n.x);sy+=(m.y-n.y)}
   if(neighbours.length){sx=sx/neighbours.length;sx-=0;sy=sy/neighbours.length}
-  const spring=.000045,drift=.000065;
+  const spring=.000075,drift=.00012;
   n.vx=n.vx*.965+fx*drift+sx*spring+Math.sin(t*.4+n.phase)*.000018;
   n.vy=n.vy*.965+fy*drift+sy*spring+Math.cos(t*.33+n.phase)*.000018;
   n.x+=n.vx*dt60;n.y+=n.vy*dt60;
@@ -272,10 +269,10 @@ function update(dt){
  t+=dt;frameNo++;updateNodes(dt);
  // The past remains as physical residue; the present keeps moving above it.
  worldCtx.save();worldCtx.globalAlpha=.023;worldCtx.fillStyle=paper;worldCtx.fillRect(0,0,W,H);worldCtx.restore();
- worldCtx.save();worldCtx.globalAlpha=.09;for(const e of edges){if(e.alive===false)continue;const a=get(e.a),b=get(e.b);if(!a||!b)continue;worldCtx.strokeStyle=ink;worldCtx.lineWidth=Math.max(.5,e.width*.35);worldCtx.beginPath();worldCtx.moveTo(a.px*W,a.py*H);worldCtx.lineTo(a.x*W,a.y*H);worldCtx.stroke()}worldCtx.restore();
+ worldCtx.save();worldCtx.globalAlpha=.09;for(const e of edges){if(e.alive===false)continue;const a=get(e.a),b=get(e.b);if(!a||!b)continue;worldCtx.strokeStyle=ink;worldCtx.lineWidth=Math.max(.5,e.width*S*.35);worldCtx.beginPath();worldCtx.moveTo(a.px*W,a.py*H);worldCtx.lineTo(a.x*W,a.y*H);worldCtx.stroke()}worldCtx.restore();
  if(t>=nextEvent){rareEvent();nextEvent=t+between(.65,3.8)}
  if(t>=nextBirth){grow();nextBirth=t+between(.35,2.1)}
- if(t>=nextPigment){if(random()<.8)pigmentEvent();nextPigment=t+between(3,13)}
+ if(t>=nextPigment){if(random()<.8)pigmentEvent();nextPigment=t+between(2.8,10)}
  if(t>=nextVortex){const v=pick(vortices);v.x=between(W*.08,W*.92);v.y=between(H*.08,H*.92);v.r=between(S*.04,S*.2);v.power=between(-.9,.9);nextVortex=t+between(4,16)}
  if(t>=nextMemory){memories.push({t,frame:frameNo});if(memories.length>6)memories.shift();nextMemory=t+between(15,35)}
  for(const e of edges){if(e.pigment&&t>=e.pigment.end)e.pigment=null;if(e.alive!==false)e.age+=dt}
