@@ -146,11 +146,11 @@ function membrane(c,cl){
  // The colony is no longer a filled tile: only its broken perimeter and selected internal seams remain.
  c.save();c.globalAlpha=.7;c.strokeStyle=ink;c.lineWidth=Math.max(.8,S*.0012);c.lineJoin='miter';c.lineCap='square';
  c.beginPath();for(let i=0;i<ordered.length;i++){const n=ordered[i];if(i===0)c.moveTo(n.x*W,n.y*H);else c.lineTo(n.x*W,n.y*H)}c.closePath();c.stroke();
- for(let i=0;i<ordered.length;i+=3){const n=ordered[i],q=ordered[(i+1)%ordered.length];c.globalAlpha=.4+random()*.4;c.lineWidth=Math.max(1,S*between(.001,.004));c.beginPath();c.moveTo(n.x*W,n.y*H);c.lineTo(q.x*W,q.y*H);c.stroke()}
+ for(let i=0;i<ordered.length;i+=3){const n=ordered[i],q=ordered[(i+1)%ordered.length];c.globalAlpha=.42+((n.phase+q.phase)%1)*.32;c.lineWidth=Math.max(1,S*(.0012+Math.abs(Math.sin(n.phase+q.phase))*.002));c.beginPath();c.moveTo(n.x*W,n.y*H);c.lineTo(q.x*W,q.y*H);c.stroke()}
  if(inner.length>4){c.globalAlpha=.55;c.lineWidth=Math.max(.6,S*.0008);c.setLineDash([S*.009,S*.006]);c.beginPath();inner.forEach((n,i)=>i?c.lineTo(n.x*W,n.y*H):c.moveTo(n.x*W,n.y*H));c.closePath();c.stroke();c.setLineDash([])}
  // Small hatch islands punctuate the territory without turning it into a solid panel.
  c.save();c.translate(cx,cy);c.rotate(cl.phase+t*.02);c.strokeStyle=ink;c.globalAlpha=.48;c.lineWidth=Math.max(.6,S*.0008);
- for(let j=0;j<3;j++){let x=between(-cl.rx*W*.55,cl.rx*W*.55),y=between(-cl.ry*H*.55,cl.ry*H*.55),w=between(S*.018,S*.07);for(let k=0;k<8;k++){c.beginPath();c.moveTo(x-w*.5+k*w/8,y-w*.2);c.lineTo(x-w*.5+k*w/8+w*.3,y+w*.2);c.stroke()}}
+ for(let j=0;j<3;j++){let x=Math.sin(cl.phase+j*2.1+t*.09)*cl.rx*W*.55,y=Math.cos(cl.phase+j*1.7+t*.075)*cl.ry*H*.55,w=S*(.018+j*.014);for(let k=0;k<8;k++){c.beginPath();c.moveTo(x-w*.5+k*w/8,y-w*.2);c.lineTo(x-w*.5+k*w/8+w*.3,y+w*.2);c.stroke()}}
  c.restore();c.restore();
 }
 function smallGlyph(c,x,y,s,a,col,kind){
