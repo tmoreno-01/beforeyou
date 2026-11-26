@@ -402,7 +402,7 @@ function spectralEvent(){
   let candidates=boxes.filter(b=>!pigments.has(b.id)&&b.w*b.h/(W*H)<Math.min(.065,cap-area)&&b.w>12&&b.h>12);
   let count=rand()<.25?2:1;
   while(count--&&candidates.length&&pigments.size<7){let b=candidates.splice(R(candidates.length),1)[0],ar=b.w*b.h/(W*H);if(area+ar>cap)continue;b.palette=4+R(palettes.length-4);b.accent=2;paint(b,true);pigments.set(b.id,{box:b,palette:b.palette,start:age,end:age+5+rand()*24});area+=ar}
-  nextColour=age+(3+Math.pow(rand(),1.4)*29)/profile.colour;
+  nextColour=age+(3+Math.pow(rand(),1.4)*29)/(profile.colour*(.8+moods[6]*.65));
  }
  pigmentUpload();
 }
@@ -423,7 +423,7 @@ function mutateDialect(d){
  d.weight=Math.max(1,Math.min(4,d.weight+(rand()-.5)*1.1));d.connect=Math.max(0,Math.min(1,(d.connect??.5)+(rand()-.5)*.2));d.risk=Math.max(0,Math.min(1,(d.risk??.5)+(rand()-.5)*.2));
 }
 function conversation(){
- if(boxes.length<2)return;let a=chooseBox(),near=boxes.filter(b=>b!==a&&adjacentLoose(a,b));if(!near.length)return;
+ if(boxes.length<2)return;let candidates=boxes.filter(b=>b.w*b.h/(W*H)<.14),a=candidates.length?pick(candidates):chooseBox(),near=boxes.filter(b=>b!==a&&adjacentLoose(a,b));if(!near.length)return;
  let b=pick(near),family=dialects[a.dialect]||dialects[0];if(!family)return;
  let trait=R(5);
  if(trait===0)b.gene=(b.gene^(1<<R(5)))&31;
@@ -458,10 +458,12 @@ function agentTextureUpload(){
  if(!agentCanvas||!agentTex)return;gl.activeTexture(gl.TEXTURE6);gl.bindTexture(gl.TEXTURE_2D,agentTex);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,gl.RGBA,gl.UNSIGNED_BYTE,agentCanvas);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
 }
 function makeAgents(){
- agents=[];for(let i=0;i<14;i++)agents.push({role:i%8,x:rand()*.9+.05,y:rand()*.9+.05,angle:rand()*Math.PI*2,speed:.008+rand()*.025,energy:.5+rand()*.5,trail:rand(),target:null,nextAct:age+rand()*5,home:rand()*.5+.25,phase:rand()*Math.PI*2});
+ const roles=profile.id==='memory'?[0,1,1,1,2,3,4,5,6,7,1,4,5,6]:profile.id==='agents'?[0,0,1,2,2,3,3,4,4,4,5,5,5,6,6,7,7,4,5,1]:[0,1,2,3,4,5,6,7,0,1,2,4,5,7,6,3];
+ agents=roles.map(role=>({role,x:rand()*.9+.05,y:rand()*.9+.05,angle:rand()*Math.PI*2,speed:(.008+rand()*.025)*profile.agents,energy:.5+rand()*.5,trail:rand(),target:null,nextAct:age+rand()*5,home:rand()*.5+.25,phase:rand()*Math.PI*2}));
 }
 function agentAction(a,b){
  if(!b||age<a.nextAct)return;
+ const manageable=boxes.filter(q=>q.w*q.h/(W*H)<.11);if(b.w*b.h/(W*H)>.13&&manageable.length)b=pick(manageable);
  a.nextAct=age+(1.8+rand()*8)/(profile.agents*(.8+moods[0]*.4+moods[6]*.35));
  const other=pick(boxes),neighbours=boxes.filter(q=>q!==b&&adjacentLoose(b,q));
  if(a.role===0){b.kind=chooseKind(0,rolePools[0]);b.gene=(b.gene^(1<<R(5)))&31;b.dialect=R(dialects.length);paint(b,true);genome(b);rememberEvent(b,'scribe')}
@@ -523,7 +525,7 @@ function livingEvents(){
  }
 }
 function climateEvent(){
- if(age>=nextWeather){weather=pick([0,0,0,1,1,2,3]);nextWeather=age+5+rand()*32;if(weather===2||weather===3)burst=2+R(7);if(rand()<.24)paletteIndex=R(4)}
+ if(age>=nextWeather){weather=pick(moods[2]>.6?[0,1,2,3,3]:moods[3]>.6?[0,0,1,1,2]:[0,0,0,1,1,2,3]);nextWeather=age+5+rand()*32;if(weather===2||weather===3)burst=2+R(7);if(rand()<.24+moods[6]*.2)paletteIndex=R(4)}
 }
 function deepMemory(){
  if(age<nextSnapshot)return;
@@ -532,8 +534,8 @@ function deepMemory(){
  let tex=snapshots[archiveIndex];gl.bindFramebuffer(gl.FRAMEBUFFER,fb[read]);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
  gl.copyTexSubImage2D(gl.TEXTURE_2D,0,0,0,0,0,W,H);
  archiveIndex=(archiveIndex+1)%snapshots.length;
- let b=chooseBox(),older=snapshots[archiveIndex];let temp=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,temp);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,older,0);
- gl.bindTexture(gl.TEXTURE_2D,archive);gl.copyTexSubImage2D(gl.TEXTURE_2D,0,b.x,H-b.y-b.h,b.x,H-b.y-b.h,b.w,b.h);gl.deleteFramebuffer(temp);
+ let b=chooseBox(),older=snapshots[archiveIndex];if(!b)return;let temp=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,temp);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,older,0);
+ gl.bindTexture(gl.TEXTURE_2D,archive);gl.copyTexSubImage2D(gl.TEXTURE_2D,0,b.x,H-b.y-b.h,b.x,H-b.y-b.h,b.w,b.h);gl.deleteFramebuffer(temp);rememberEvent(b,'deep-memory');
 }
 function newFracture(){
  if(!fractureCtx)return;
@@ -566,7 +568,7 @@ function rebuild(change=false){
  [W,H]=resolutionFor(canvas.width,canvas.height,!preview||fullQuality);
  [...targets,base,regions,archive,fractureField,pigmentTex,agentTex,...snapshots].filter(Boolean).forEach(t=>gl.deleteTexture(t));fb.forEach(t=>gl.deleteFramebuffer(t));
  baseData=new Uint8Array(W*H*4);fieldData=new Uint8Array(W*H*4);memoryData=new Uint8Array(W*H*4);initAtlas();
- base=texture(baseData);regions=texture(fieldData);archive=texture(memoryData);fractureField=texture(null);pigmentTex=gl.createTexture();gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,pigmentTex);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);pigmentBytes.fill(0);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,256,1,0,gl.RGBA,gl.UNSIGNED_BYTE,pigmentBytes);fractureCanvas=document.createElement('canvas');fractureCanvas.width=W;fractureCanvas.height=H;fractureCtx=fractureCanvas.getContext('2d',{willReadFrequently:true});agentCanvas=document.createElement('canvas');agentCanvas.width=1024;agentCanvas.height=1024;agentCtx=agentCanvas.getContext('2d');agentTex=gl.createTexture();gl.activeTexture(gl.TEXTURE6);gl.bindTexture(gl.TEXTURE_2D,agentTex);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,1024,1024,0,gl.RGBA,gl.UNSIGNED_BYTE,null);makeAgents();snapshots.length=0;for(let i=0;i<3;i++)snapshots.push(texture(baseData));
+ base=texture(baseData);regions=texture(fieldData);archive=texture(memoryData);fractureField=texture(null);pigmentTex=gl.createTexture();gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,pigmentTex);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);pigmentBytes.fill(0);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,256,1,0,gl.RGBA,gl.UNSIGNED_BYTE,pigmentBytes);fractureCanvas=document.createElement('canvas');fractureCanvas.width=W;fractureCanvas.height=H;fractureCtx=fractureCanvas.getContext('2d',{willReadFrequently:true});agentCanvas=document.createElement('canvas');agentCanvas.width=1024;agentCanvas.height=1024;agentCtx=agentCanvas.getContext('2d');agentTex=gl.createTexture();gl.activeTexture(gl.TEXTURE6);gl.bindTexture(gl.TEXTURE_2D,agentTex);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,1024,1024,0,gl.RGBA,gl.UNSIGNED_BYTE,null);makeAgents();agentTextureUpload();snapshots.length=0;for(let i=0;i<3;i++)snapshots.push(texture(baseData));
  let initial=baseData.slice();for(let i=3;i<initial.length;i+=4)initial[i]=0;
  targets=[texture(initial),texture(initial)];fb=targets.map(t=>{let a=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,a);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('Framebuffer incomplete');return a});
  read=0;step=0;acc=0;last=0;age=0;epoch=0;events=0;nextEvent=.4+rand()*2;entropy=Math.floor(fresh()*100000000);nextEntropy=0;newFracture();draw();
