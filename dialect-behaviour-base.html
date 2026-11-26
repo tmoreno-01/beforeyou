@@ -98,7 +98,7 @@ void main(){
  if(role==7&&rolePulse>.38){q+=ivec2(dx*(3+int(speed*4.)),-dy*(2+int(speed*3.)));gate=max(gate,.82*moodB.z);}
  vec4 old=get(prev,p),home=get(original,p),left=get(prev,p+ivec2(-1,0)),right=get(prev,p+ivec2(1,0)),up=get(prev,p+ivec2(0,1)),down=get(prev,p+ivec2(0,-1));
  float infection=max(max(left.a,right.a),max(up.a,down.a));
- float r=noise(p,tick+salt+entropy),local=noise(p/ivec2(13,9),tick/44+salt);vec2 uv=(z+vec2(.5))/vec2(dim);vec4 agentMark=texture(agentsTex,uv);float agentForce=moodB.w;
+ float r=noise(p,tick+salt+entropy),local=noise(p/ivec2(13,9),tick/44+salt);vec2 uv=z/vec2(dim);vec4 agentMark=texture(agentsTex,uv);float agentForce=moodB.w;
  // A bounded travelling state: infection is carried by neighbours, decays, and occasionally germinates.
  float live=max(0.,old.a-.025);
  if(infection>.11&&r<.21+porosity*.32)live=max(live,infection-.035);
