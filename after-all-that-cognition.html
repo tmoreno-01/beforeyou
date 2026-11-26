@@ -142,7 +142,7 @@ void main(){
  }
  // Slow structural repair is distinct from animation; quiet regions preserve the drawn grammar.
  float chance=rnd(p,tick+entropy+zid*47);
- float repair=(.012+meta.b*.023)*(1.-activity*.45)*(1.+suture*.4);
+ float repair=(.009+meta.b*.023)*(1.-activity*.45)*(1.+suture*.4+max(0.,.45-percept.r)*.7);
  // Independent analytical cuts: a broken polyline follows the zone's prediction error, not a moving object.
  vec2 anchor=vec2(fault.r,fault.g);vec2 d=(uv-anchor)*vec2(float(dim.x)/float(dim.y),1.);
  vec2 fa=vec2(cos(fault.b*6.2831853),sin(fault.b*6.2831853)),fn=vec2(-fa.y,fa.x);
@@ -151,6 +151,8 @@ void main(){
  float zig=abs(mod(along*11.+belief.a,2.)-1.)-.5;
  float crease=across-zig*.025-sin(along*29.+phase)*.009;
  float slit=(1.-smoothstep(.001,.004+tear*.012,abs(crease)))*(1.-smoothstep(reach*.7,reach,abs(along)))*fault.a;
+ float fork=abs(crease-sign(along)*max(0.,abs(along)-reach*.24)*(.18+belief.g*.25));
+ if(control.b>.45)slit=max(slit,(1.-smoothstep(.001,.003,fork))*(1.-smoothstep(reach*.6,reach,abs(along)))*fault.a*.65);
  float side=sign(crease);float serration=step(.2,fract(along*91.+phase));
  if(slit>.035&&serration>.1){ivec2 delta=ivec2(round(fn*side*(2.+slit*13.)*size+fa*(reg*6.)*size));v=get(prev,p+delta).rgb;if(slit>.6&&abs(crease)<.0015)v=vec3(lum(v)>.5?.06:.94);}
  if(suture>.4&&slit>.1&&chance<.06*suture)v=home.rgb;
@@ -629,12 +631,12 @@ function describeFrame(){
  }
  for(const d of domains){const q=stats[d.id],n=Math.max(1,q.n);let mean=q.l/n,contrast=Math.sqrt(Math.max(0,q.l2/n-mean*mean));d.features=[contrast,q.e/n,q.c/n,q.rep/n,q.ink/n,clamp(.5+q.dir/n*.5,0,1)];}
  sendSmall(perceptTex,64,48,perceptBytes);learnPerception();
- if(age>=nextEncode){memories.push({time:age,desc,genomes:domains.map(d=>cloneProgram(d.genome)),generation:0});if(memories.length>16)memories.shift();nextEncode=age+11+rand()*16;vmEncoded++}
+ if(age>=nextEncode){memories.push({time:age,desc,genomes:domains.map(d=>cloneProgram(d.genome)),generation:0,cue:pick(domains).features.slice()});if(memories.length>16)memories.shift();nextEncode=age+11+rand()*16;vmEncoded++}
  if(!vmRecalled&&memories.length)reconstructMemory();
 }
 function reconstructMemory(){
  if(!memories.length)return;
- let m=pick(memories),out=new Uint8Array(m.desc.length),theta=pick([0,0,.10,-.12,.24,-.30]),shiftX=R(9)-4,shiftY=R(7)-3;
+ let pool=memories.filter(m=>m.generation<5),cue=pick(domains),m=pool.length?pick(pool):pick(memories);if(cue.features&&pool.length>2&&rand()<.72){let ranked=pool.map(m=>({m,dist:featureDistance(cue.features,m.cue||cue.features)})).sort((a,b)=>a.dist-b.dist);m=rand()<.28?ranked[ranked.length-1].m:ranked[R(Math.min(3,ranked.length))].m;}let out=new Uint8Array(m.desc.length),theta=pick([0,0,.10,-.12,.24,-.30]),shiftX=R(9)-4,shiftY=R(7)-3;
  let c=Math.cos(theta),sn=Math.sin(theta);
  for(let y=0;y<48;y++)for(let x=0;x<64;x++){
   let xx=x-32,yy=y-24,sx=clamp(Math.round(xx*c-yy*sn+32+shiftX+(Math.sin(y*.29)*2)),0,63),sy=clamp(Math.round(xx*sn+yy*c+24+shiftY),0,47);
@@ -645,7 +647,7 @@ function reconstructMemory(){
  }
  recallBytes.set(out);sendSmall(recallTex,64,48,recallBytes);vmRecalled++;
  // Recall itself becomes a memory, so errors accumulate across generations.
- if(rand()<.65){memories.push({time:age,desc:out,genomes:m.genomes,generation:m.generation+1});if(memories.length>16)memories.shift()}
+ if(rand()<.65){memories.push({time:age,desc:out,genomes:m.genomes,generation:m.generation+1,cue:(cue.features||m.cue||[.3,.2,.1,.8,.5,.5]).map(v=>clamp(v+(rand()-.5)*.12,0,1))});if(memories.length>16)memories.shift()}
  let d=pick(domains);if(!d.trial&&m.genomes[d.id]&&rand()<.75){beginTrial(d,mutateProgram(m.genomes[d.id],d.genome));}
 }
 function featureDistance(a,b){return Math.sqrt(a.reduce((n,v,i)=>n+(v-b[i])**2,0)/a.length)}
@@ -661,7 +663,7 @@ function fitness(d,features){
 function beginTrial(d,g){
  if(!d.features||d.trial)return;
  d.trial={old:cloneProgram(d.genome),oldFeatures:d.features.slice(),oldScore:fitness(d,d.features),until:age+4+rand()*5,oldRate:d.rate,samples:[],oldLineage:d.lineage};
- d.genome=g;if(rand()<.26)d.rate=clamp(d.rate+(rand()-.5)*.22,.10,.96);vmTrials++;uploadVM();
+ d.lastSample=brainEpoch;d.genome=g;if(rand()<.26)d.rate=clamp(d.rate+(rand()-.5)*.22,.10,.96);vmTrials++;uploadVM();
 }
 function evolveVM(){
  if(age<nextTrial)return;nextTrial=age+1.4/profile.evolveRate;
