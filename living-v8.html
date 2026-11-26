@@ -488,7 +488,7 @@ function rebuild(change=false){
  rand=fresh;layout=profile.layout;pigments.clear();nextPigment=.8+rand()*8;nextAnomaly=2+rand()*7;nextRewrite=5+rand()*8;anomaly=[0,0,0,0];anomalyEnd=0;nextSpread=2;nextChaos=4+rand()*12;chaosStart=0;chaosEnd=0;chaosLevel=0;paletteIndex=R(4);era=0;nextColour=8+rand()*26;colourID=0;colourEnd=0;nextWeather=5+rand()*10;weather=0;burst=0;nextSnapshot=25+rand()*30;archiveIndex=0;
  let r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);
  canvas.width=Math.max(2,Math.round(r.width*d));canvas.height=Math.max(2,Math.round(r.height*d));
- let limit=preview?165000:(matchMedia('(pointer:coarse)').matches?650000:1250000);let scale=Math.min(1,1500/canvas.width,1080/canvas.height,Math.sqrt(limit/(canvas.width*canvas.height)));W=Math.max(2,Math.round(canvas.width*scale*quality));H=Math.max(2,Math.round(canvas.height*scale*quality));
+ [W,H]=resolutionFor(canvas.width,canvas.height,!preview||fullQuality);
  [...targets,base,regions,archive,fractureField,pigmentTex,...snapshots].filter(Boolean).forEach(t=>gl.deleteTexture(t));fb.forEach(t=>gl.deleteFramebuffer(t));
  baseData=new Uint8Array(W*H*4);fieldData=new Uint8Array(W*H*4);memoryData=new Uint8Array(W*H*4);initAtlas();
  base=texture(baseData);regions=texture(fieldData);archive=texture(memoryData);fractureField=texture(null);pigmentTex=gl.createTexture();gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,pigmentTex);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);pigmentData.fill(0);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,256,1,0,gl.RGBA,gl.UNSIGNED_BYTE,pigmentData);fractureCanvas=document.createElement('canvas');fractureCanvas.width=W;fractureCanvas.height=H;fractureCtx=fractureCanvas.getContext('2d',{willReadFrequently:true});snapshots.length=0;for(let i=0;i<3;i++)snapshots.push(texture(baseData));
@@ -503,9 +503,62 @@ function mutate(){
  gl.drawArrays(gl.TRIANGLES,0,3);read=1-read;
 }
 function draw(){gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.useProgram(show);bind(targets[read],0,du.tex);gl.uniform2f(du.view,canvas.width,canvas.height);gl.drawArrays(gl.TRIANGLES,0,3);}
-function frame(now){let dt=last?Math.min(now-last,100):0;last=now;if(!paused&&!document.hidden){age+=dt/1000;if(age>=nextEntropy){entropy=Math.floor(fresh()*100000000);nextEntropy=age+.6+fresh()*2.8;}if(age>=nextFracture)newFracture();if(age>=nextEvent){evolve();spectralEvent();}phenomena();chaosEvent();climateEvent();deepMemory();acc=Math.min(acc+dt,100);let n=0;while(acc>=1000/(preview?18:30)&&n<(preview?1:2)){mutate();acc-=1000/(preview?18:30);n++;}if(n)draw()}requestAnimationFrame(frame)}
+function frame(now){let dt=last?Math.min(now-last,100):0;last=now;if(!paused&&!document.hidden){age+=dt/1000;if(age>=nextEntropy){entropy=Math.floor(fresh()*100000000);nextEntropy=age+.6+fresh()*2.8;}if(age>=nextFracture)newFracture();if(age>=nextEvent){evolve();spectralEvent();}phenomena();chaosEvent();climateEvent();deepMemory();acc=Math.min(acc+dt,100);let n=0;while(acc>=1000/((preview&&!fullQuality)?18:30)&&n<((preview&&!fullQuality)?1:2)){mutate();acc-=1000/((preview&&!fullQuality)?18:30);n++;}if(n)draw()}requestAnimationFrame(frame)}
 window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===parent&&e.data&&e.data.type==='study-visibility'){paused=!e.data.visible;last=0}});
-let timer;new ResizeObserver(()=>{clearTimeout(timer);timer=setTimeout(()=>{let r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);let w=Math.max(2,Math.round(r.width*d)),h=Math.max(2,Math.round(r.height*d));if(targets.length&&(canvas.width!==w||canvas.height!==h)){canvas.width=w;canvas.height=h;draw()}},80)}).observe(canvas);
+
+let fullQuality=false;
+function resolutionFor(w,h,high){
+ const coarse=matchMedia('(pointer:coarse)').matches;
+ const pixels=high?(coarse?1250000:3686400):165000;
+ const maxW=high?(coarse?1800:2560):1500,maxH=high?(coarse?1800:1440):1080;
+ const k=Math.min(1,maxW/w,maxH/h,Math.sqrt(pixels/(w*h)));
+ return [Math.max(2,Math.round(w*k)),Math.max(2,Math.round(h*k))];
+}
+function resampleBytes(src,ow,oh,nw,nh){
+ const dst=new Uint8Array(nw*nh*4),xmap=new Int32Array(nw);
+ for(let x=0;x<nw;x++)xmap[x]=Math.min(ow-1,Math.floor((x+.5)*ow/nw))*4;
+ for(let y=0;y<nh;y++){let sy=Math.min(oh-1,Math.floor((y+.5)*oh/nh))*ow*4;
+  for(let x=0;x<nw;x++){let a=sy+xmap[x],b=(y*nw+x)*4;dst[b]=src[a];dst[b+1]=src[a+1];dst[b+2]=src[a+2];dst[b+3]=src[a+3]}}
+ return dst;
+}
+function resizeSimulation(nw,nh){
+ if(!targets.length||nw===W&&nh===H)return;
+ const ow=W,oh=H,oldTargets=targets.slice(),oldFb=fb.slice(),oldBase=base,oldRegions=regions,oldArchive=archive,oldSnapshots=snapshots.slice();
+ const a=gl.createFramebuffer(),b=gl.createFramebuffer();
+ W=nw;H=nh;
+ function transfer(t){const dst=texture(null);
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER,a);gl.framebufferTexture2D(gl.READ_FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER,b);gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,dst,0);
+  gl.blitFramebuffer(0,0,ow,oh,0,0,W,H,gl.COLOR_BUFFER_BIT,gl.NEAREST);return dst;
+ }
+ base=transfer(oldBase);regions=transfer(oldRegions);archive=transfer(oldArchive);targets=oldTargets.map(transfer);
+ snapshots.length=0;for(const t of oldSnapshots)snapshots.push(transfer(t));
+ const oldFracture=fractureField;fractureField=transfer(oldFracture);gl.deleteTexture(oldFracture);
+ const oldCanvas=fractureCanvas;fractureCanvas=document.createElement('canvas');fractureCanvas.width=W;fractureCanvas.height=H;fractureCtx=fractureCanvas.getContext('2d',{willReadFrequently:true});fractureCtx.imageSmoothingEnabled=false;fractureCtx.drawImage(oldCanvas,0,0,W,H);
+ gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.deleteFramebuffer(a);gl.deleteFramebuffer(b);
+ for(const t of [...oldTargets,oldBase,oldRegions,oldArchive,...oldSnapshots])gl.deleteTexture(t);
+ oldFb.forEach(f=>gl.deleteFramebuffer(f));
+ baseData=resampleBytes(baseData,ow,oh,W,H);memoryData=resampleBytes(memoryData,ow,oh,W,H);
+ fieldData=new Uint8Array(W*H*4);
+ // Shared rounded boundaries keep the existing atlas contiguous.
+ for(const box of boxes){let x=Math.round(box.x*W/ow),y=Math.round(box.y*H/oh),right=Math.round((box.x+box.w)*W/ow),bottom=Math.round((box.y+box.h)*H/oh);box.x=x;box.y=y;box.w=right-x;box.h=bottom-y}
+ boxes=boxes.filter(box=>box.w>0&&box.h>0);
+ // Regenerate full-resolution ownership and genes; do not replace the live feedback.
+ for(const box of boxes){genome(box);for(let y=H-box.y-box.h;y<H-box.y;y++)for(let x=box.x;x<box.x+box.w;x++){let i=(y*W+x)*4;fieldData[i]=box.id;fieldData[i+1]=box.gene;fieldData[i+2]=box.speed;fieldData[i+3]=box.porosity}}
+ fb=targets.map(t=>{let f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);return f});
+ 
+ // Future local rewrites now generate native-resolution details instead of enlarging pixels.
+ draw();
+}
+function fitArt(){
+ const r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);
+ const w=Math.max(2,Math.round(r.width*d)),h=Math.max(2,Math.round(r.height*d));
+ if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
+ if(targets.length){const [nw,nh]=resolutionFor(w,h,!preview||fullQuality);resizeSimulation(nw,nh);draw()}
+}
+
+let timer;new ResizeObserver(()=>{clearTimeout(timer);timer=setTimeout(fitArt,120)}).observe(canvas);
+window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===parent&&e.data?.type==='study-quality'){fullQuality=!!e.data.fullscreen;clearTimeout(timer);timer=setTimeout(fitArt,100)}});
 canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();paused=true;el('err').textContent='Graphics context lost. Reload to restart.'});
 async function boot(){
  const sources=variant===1?(window.RESIDUE_MEMORY||[]):[];
