@@ -17,10 +17,10 @@ function layer(w,h){let c=document.createElement('canvas');c.width=w;c.height=h;
 const ink='#111110',paper='#eae9e2';
 function engine(canvas,style,index){
  const rand=rng((seed+index*183731)>>>0),R=n=>Math.floor(rand()*n),pick=a=>a[R(a.length)],range=(a,b)=>a+rand()*(b-a),sign=()=>rand()<.5?-1:1;
- let rect=canvas.getBoundingClientRect(), ratio=Math.max(.6,Math.min(2.5,rect.width/Math.max(1,rect.height))),W=solo?Math.min(1450,Math.max(720,Math.round(rect.width*Math.min(devicePixelRatio,1.5)))):Math.min(760,Math.max(420,Math.round(rect.width*1.25))),H=Math.round(W/ratio);
- if(H>1050){W=Math.round(W*1050/H);H=1050}
+ let rect=canvas.getBoundingClientRect(), ratio=Math.max(.6,Math.min(2.5,rect.width/Math.max(1,rect.height))),W=solo?Math.min(2560,Math.max(720,Math.round(rect.width*Math.min(devicePixelRatio,2)))):Math.min(760,Math.max(420,Math.round(rect.width*1.25))),H=Math.round(W/ratio);
+ if(H>(solo?1440:1050)){let cap=solo?1440:1050;W=Math.round(W*cap/H);H=cap}
  canvas.width=W;canvas.height=H;
- const ctx=canvas.getContext('2d',{alpha:false}), S=Math.min(W,H), surface=layer(W,H), g=surface.getContext('2d',{alpha:false}), copy=layer(W,H), cp=copy.getContext('2d',{alpha:false}), memory=layer(W,H), mg=memory.getContext('2d',{alpha:false}), grain=layer(W,H), ng=grain.getContext('2d');
+ const ctx=canvas.getContext('2d',{alpha:false});let S=Math.min(W,H),surface=layer(W,H),g=surface.getContext('2d',{alpha:false}),copy=layer(W,H),cp=copy.getContext('2d',{alpha:false}),memory=layer(W,H),mg=memory.getContext('2d',{alpha:false}),grain=layer(W,H),ng=grain.getContext('2d');
  const base=rand()<style.dark?ink:paper, opp=base===ink?paper:ink;
  let age=0,last=0,nextMajor=0,nextPatch=0,nextScratch=0,nextArchive=40,nextAccent=35+range(0,100),accentUntil=0,accentColour='',visible=true,actors=[],anchors=[],sprites=[],lastFrame=0;
  function poly(c,points){c.beginPath();points.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.closePath()}
@@ -163,9 +163,16 @@ function engine(canvas,style,index){
  }
  function present(){ctx.drawImage(surface,0,0);ctx.drawImage(grain,0,0)}
  let obs=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;last=0},{rootMargin:'50px'});obs.observe(canvas);
+ function fitPrint(){
+  let full=document.fullscreenElement||document.webkitFullscreenElement,high=solo||full===canvas,r=canvas.getBoundingClientRect(),d=high?Math.min(devicePixelRatio||1,2):1.25;
+  let nw=Math.max(2,Math.round(r.width*d)),nh=Math.max(2,Math.round(r.height*d)),cap=high?3686400:760*760,sc=Math.min(1,(high?2560:760)/nw,(high?1440:1050)/nh,Math.sqrt(cap/(nw*nh)));nw=Math.max(2,Math.round(nw*sc));nh=Math.max(2,Math.round(nh*sc));
+  if(nw===W&&nh===H)return;let ow=W,oh=H,os=S,oldSurface=surface,oldMemory=memory;W=nw;H=nh;S=Math.min(W,H);canvas.width=W;canvas.height=H;surface=layer(W,H);g=surface.getContext('2d',{alpha:false});g.imageSmoothingEnabled=false;g.drawImage(oldSurface,0,0,W,H);memory=layer(W,H);mg=memory.getContext('2d',{alpha:false});mg.imageSmoothingEnabled=false;mg.drawImage(oldMemory,0,0,W,H);copy=layer(W,H);cp=copy.getContext('2d',{alpha:false});grain=layer(W,H);ng=grain.getContext('2d');let im=ng.createImageData(W,H);for(let i=0;i<im.data.length;i+=4){let v=rand()<.53?0:255;im.data[i]=im.data[i+1]=im.data[i+2]=v;im.data[i+3]=R(33)}ng.putImageData(im,0,0);
+  for(let a of anchors){a[0]*=W/ow;a[1]*=H/oh}for(let a of actors){a.x*=W/ow;a.y*=H/oh;a.r*=S/os;a.speed*=S/os}present();
+ }
+ document.addEventListener('fullscreenchange',fitPrint);document.addEventListener('webkitfullscreenchange',fitPrint);
  init();nextMajor=.25+rand();nextPatch=.1+rand()*.4;nextScratch=.1;
  return function tick(now){
-  if(!visible||document.hidden){last=0;return}
+  if(!visible||document.hidden||((document.fullscreenElement||document.webkitFullscreenElement)&&(document.fullscreenElement||document.webkitFullscreenElement)!==canvas)){last=0;return}
   if(now-lastFrame<(solo?33:50))return;lastFrame=now;
   let dt=last?Math.min(.1,(now-last)/1000):0;last=now;age+=dt;
   animateAgents(dt);
@@ -184,8 +191,10 @@ else{
  document.title='lifeafterlogic / living print studies';document.querySelector('header').hidden=false;
  let canvases=styles.map(card);canvases.forEach((c,i)=>tickers.push(engine(c,styles[i],i)));
  const old=document.getElementById('legacy');old.hidden=false;let list=[['07 — Broken Logic (v4)','geometry'],['08 — Physical Memory (v4)','memory'],['09 — Unknown Language (v4)','language']];
- const watch=new IntersectionObserver(entries=>{for(let e of entries){let p=e.target;p.dataset.visible=e.isIntersecting?'1':'0';let f=p.querySelector('iframe');const send=()=>{const current=p.querySelector('iframe');if(current&&current.contentWindow)current.contentWindow.postMessage({type:'study-visibility',visible:p.dataset.visible==='1'},location.origin)};if(e.isIntersecting&&!f){f=document.createElement('iframe');f.title=p.dataset.label;f.src='./index.html?study='+p.dataset.study+'&v=4';f.loading='lazy';f.addEventListener('load',send);p.append(f)}else if(f)send()}},{rootMargin:'20px'});
+ const watch=new IntersectionObserver(entries=>{for(let e of entries){let p=e.target;p.dataset.visible=e.isIntersecting?'1':'0';let f=p.querySelector('iframe');const send=()=>{const current=p.querySelector('iframe');if(current&&current.contentWindow){let full=document.fullscreenElement||document.webkitFullscreenElement;current.contentWindow.postMessage({type:'study-visibility',visible:full?full===p:p.dataset.visible==='1'},location.origin);current.contentWindow.postMessage({type:'study-quality',fullscreen:full===p},location.origin)}};if(e.isIntersecting&&!f){f=document.createElement('iframe');f.title=p.dataset.label;f.src='./index.html?study='+p.dataset.study+'&v=4';f.loading='lazy';f.addEventListener('load',send);p.append(f)}else if(f)send()}},{rootMargin:'20px'});
  for(let [name,id] of list){let a=document.createElement('article'),p=document.createElement('div'),l=document.createElement('a');p.className='oldframe';p.dataset.study=id;p.dataset.label=name;l.textContent=name+' ↗';l.href='./index.html?study='+id+'&v=4';l.target='_blank';l.rel='noopener';a.append(p,l);addFull(a,p,l.href);old.querySelector('.grid').append(a);watch.observe(p)}
 }
+function syncLegacyQuality(){let full=document.fullscreenElement||document.webkitFullscreenElement;document.querySelectorAll('.oldframe').forEach(p=>{let f=p.querySelector('iframe');if(f&&f.contentWindow){f.contentWindow.postMessage({type:'study-quality',fullscreen:full===p},location.origin);f.contentWindow.postMessage({type:'study-visibility',visible:full?full===p:p.dataset.visible==='1'},location.origin)}})}
+document.addEventListener('fullscreenchange',syncLegacyQuality);document.addEventListener('webkitfullscreenchange',syncLegacyQuality);
 function frame(now){for(let t of tickers)t(now);requestAnimationFrame(frame)}requestAnimationFrame(frame);
 })();</script></body></html>
