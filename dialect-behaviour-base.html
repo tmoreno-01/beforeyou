@@ -466,14 +466,14 @@ function agentAction(a,b){
  const manageable=boxes.filter(q=>q.w*q.h/(W*H)<.11);if(b.w*b.h/(W*H)>.13&&manageable.length)b=pick(manageable);
  a.nextAct=age+(1.8+rand()*8)/(profile.agents*(.8+moods[0]*.4+moods[6]*.35));
  const other=pick(boxes),neighbours=boxes.filter(q=>q!==b&&adjacentLoose(b,q));
- if(a.role===0){b.kind=chooseKind(0,rolePools[0]);b.gene=(b.gene^(1<<R(5)))&31;b.dialect=R(dialects.length);paint(b,true);genome(b);rememberEvent(b,'scribe')}
- if(a.role===1){let old=shortMemory.length?pick(shortMemory):null;if(old){b.gene=(old.gene^(1<<R(5)))&31;b.role=old.role;b.dialect=old.dialect;b.kind=old.kind;paint(b,true);genome(b);rememberEvent(b,'recalled')}else{b.kind=chooseKind(1,rolePools[1]);paint(b,true)}}
+ if(a.role===0){b.role=0;b.kind=chooseKind(0,rolePools[0]);b.gene=(b.gene^(1<<R(5)))&31;b.dialect=R(dialects.length);paint(b,true);genome(b);rememberEvent(b,'scribe')}
+ if(a.role===1){let old=shortMemory.length?pick(shortMemory):null;if(old){b.gene=(old.gene^(1<<R(5)))&31;b.role=old.role;b.dialect=old.dialect;b.kind=old.kind;paint(b,true);genome(b);rememberEvent(b,'recalled')}else{b.role=1;b.kind=chooseKind(1,rolePools[1]);paint(b,true)}}
  if(a.role===2&&neighbours.length){let n=pick(neighbours);b.gene=(n.gene^(1<<R(5)))&31;b.dialect=n.dialect;b.role=2;b.kind=chooseKind(2,rolePools[2]);paint(b,true);genome(b);rememberEvent(b,'repair',n)}
- if(a.role===3){b.bg=1-b.bg;b.fg=1-b.fg;b.kind=chooseKind(3,rolePools[3]);b.porosity=Math.max(18,b.porosity-24);paint(b,true);genome(b);rememberEvent(b,'redaction')}
+ if(a.role===3){b.role=3;b.bg=1-b.bg;b.fg=1-b.fg;b.kind=chooseKind(3,rolePools[3]);b.porosity=Math.max(18,b.porosity-24);paint(b,true);genome(b);rememberEvent(b,'redaction')}
  if(a.role===4&&other!==b){b.dialect=other.dialect;b.role=rand()<.55?other.role:4;b.gene=(other.gene^(1<<R(5)))&31;b.kind=chooseKind(b.role,[other.kind,...rolePools[b.role]]);paint(b,true);genome(b);rememberEvent(b,'parasitic-copy',other)}
- if(a.role===5){a.target={x:(other.x+other.w*.5)/W,y:(other.y+other.h*.5)/H};if(neighbours.length){let n=pick(neighbours);n.speed=Math.min(250,n.speed+18);genome(n);rememberEvent(n,'migration')} }
- if(a.role===6){b.palette=4+R(palettes.length-4);paint(b,true);pigments.set(b.id,{box:b,palette:b.palette,start:age,end:age+5+rand()*14});rememberEvent(b,'pigment')}
- if(a.role===7){for(let n=0;n<2&&neighbours.length;n++){let q=pick(neighbours);mutateGene(q);q.kind=chooseKind(7,rolePools[7]);paint(q,true);rememberEvent(q,'catalyst',b)}moodTargets[6]=Math.min(1,moodTargets[6]+.24)}
+ if(a.role===5){b.role=5;a.target={x:(other.x+other.w*.5)/W,y:(other.y+other.h*.5)/H};if(neighbours.length){let n=pick(neighbours);n.speed=Math.min(250,n.speed+18);genome(n);rememberEvent(n,'migration')} }
+ if(a.role===6){b.role=6;b.palette=4+R(palettes.length-4);paint(b,true);pigments.set(b.id,{box:b,palette:b.palette,start:age,end:age+5+rand()*14});rememberEvent(b,'pigment')}
+ if(a.role===7){for(let n=0;n<2&&neighbours.length;n++){let q=pick(neighbours);q.role=7;mutateGene(q);q.kind=chooseKind(7,rolePools[7]);paint(q,true);rememberEvent(q,'catalyst',b)}moodTargets[6]=Math.min(1,moodTargets[6]+.24)}
 }
 function updateAgents(){
  if(!agentCtx||age<nextAgentUpdate)return;
