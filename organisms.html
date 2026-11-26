@@ -142,16 +142,16 @@ function drawNode(c,n,ghost=false){
 function membrane(c,cl){
  const list=cl.hull.map(get).filter(n=>n&&n.alive);if(list.length<4)return;
  const cx=cl.cx*W,cy=cl.cy*H,ordered=list.slice().sort((a,b)=>Math.atan2(a.y-cl.cy,a.x-cl.cx)-Math.atan2(b.y-cl.cy,b.x-cl.cx));
- function smoothPath(items){c.beginPath();for(let i=0;i<items.length;i++){const a=items[i],b=items[(i+1)%items.length],mx=(a.x+b.x)*W*.5,my=(a.y+b.y)*H*.5;if(i===0)c.moveTo(mx,my);c.quadraticCurveTo(a.x*W,a.y*H,mx,my)}c.closePath()}
- c.save();smoothPath(ordered);c.fillStyle=cl.tribe%3===1?'#292929':ink;c.globalAlpha=.94;c.fill();c.clip();
- c.save();c.translate(cx,cy);c.rotate(cl.phase+t*.012);
- const gap=Math.max(4,S*.011);c.strokeStyle=chalk;c.globalAlpha=.58;c.lineWidth=Math.max(.6,S*.0008);
- for(let d=-S;d<S;d+=gap){c.beginPath();c.moveTo(-S,d);c.lineTo(S,d+S*.22);c.stroke()}
- for(let i=0;i<18;i++){const x=between(-cl.rx*W*.7,cl.rx*W*.7),y=between(-cl.ry*H*.7,cl.ry*H*.7),z=between(S*.008,S*.035);c.strokeStyle=chalk;c.lineWidth=Math.max(.7,S*.001);c.beginPath();c.moveTo(x,y);c.lineTo(x+z,y);c.lineTo(x+z,y+z*.6);c.stroke()}
- c.restore();c.restore();
  const inner=cl.inner.map(get).filter(n=>n&&n.alive).sort((a,b)=>Math.atan2(a.y-cl.cy,a.x-cl.cx)-Math.atan2(b.y-cl.cy,b.x-cl.cx));
- if(inner.length>4){c.save();smoothPath(inner);c.fillStyle=paper;c.fill();c.strokeStyle=ink;c.lineWidth=Math.max(1,S*.0013);c.stroke();c.clip();c.strokeStyle='#252525';c.lineWidth=Math.max(.5,S*.0007);for(let i=0;i<24;i++){let x=between(cx-cl.rx*W*.35,cx+cl.rx*W*.35),y=between(cy-cl.ry*H*.35,cy+cl.ry*H*.35);c.beginPath();c.moveTo(x,y);c.lineTo(x+between(S*.008,S*.045),y+between(-S*.015,S*.015));c.stroke()}c.restore()}
- c.save();c.translate(cx,cy);c.rotate(cl.phase);c.strokeStyle=paper;c.lineWidth=Math.max(1,S*.0015);for(let i=0;i<4;i++){let x=between(-cl.rx*W*.45,cl.rx*W*.45),y=between(-cl.ry*H*.45,cl.ry*H*.45),z=between(S*.012,S*.04);c.beginPath();c.moveTo(x,y);c.lineTo(x+z,y);c.lineTo(x+z,y+z*.6);c.stroke()}c.restore();
+ // The colony is no longer a filled tile: only its broken perimeter and selected internal seams remain.
+ c.save();c.globalAlpha=.7;c.strokeStyle=ink;c.lineWidth=Math.max(.8,S*.0012);c.lineJoin='miter';c.lineCap='square';
+ c.beginPath();for(let i=0;i<ordered.length;i++){const n=ordered[i];if(i===0)c.moveTo(n.x*W,n.y*H);else c.lineTo(n.x*W,n.y*H)}c.closePath();c.stroke();
+ for(let i=0;i<ordered.length;i+=3){const n=ordered[i],q=ordered[(i+1)%ordered.length];c.globalAlpha=.4+random()*.4;c.lineWidth=Math.max(1,S*between(.001,.004));c.beginPath();c.moveTo(n.x*W,n.y*H);c.lineTo(q.x*W,q.y*H);c.stroke()}
+ if(inner.length>4){c.globalAlpha=.55;c.lineWidth=Math.max(.6,S*.0008);c.setLineDash([S*.009,S*.006]);c.beginPath();inner.forEach((n,i)=>i?c.lineTo(n.x*W,n.y*H):c.moveTo(n.x*W,n.y*H));c.closePath();c.stroke();c.setLineDash([])}
+ // Small hatch islands punctuate the territory without turning it into a solid panel.
+ c.save();c.translate(cx,cy);c.rotate(cl.phase+t*.02);c.strokeStyle=ink;c.globalAlpha=.48;c.lineWidth=Math.max(.6,S*.0008);
+ for(let j=0;j<3;j++){let x=between(-cl.rx*W*.55,cl.rx*W*.55),y=between(-cl.ry*H*.55,cl.ry*H*.55),w=between(S*.018,S*.07);for(let k=0;k<8;k++){c.beginPath();c.moveTo(x-w*.5+k*w/8,y-w*.2);c.lineTo(x-w*.5+k*w/8+w*.3,y+w*.2);c.stroke()}}
+ c.restore();c.restore();
 }
 function smallGlyph(c,x,y,s,a,col,kind){
  c.save();c.translate(x,y);c.rotate(a);c.strokeStyle=col;c.fillStyle=col;c.lineWidth=Math.max(.55,s*.065);c.lineCap='square';
@@ -170,7 +170,7 @@ function makeFragment(cl,x,y,size,kind,fill){
 }
 function seedFragments(){
  for(const cl of clusters){
-  const count=8+R(7);
+  const count=18+R(11);
   for(let i=0;i<count;i++){
    const x=cl.cx+between(-cl.rx*.9,cl.rx*.9),y=cl.cy+between(-cl.ry*.9,cl.ry*.9);
    const size=i<2?between(.11,.19):between(.035,.105),kind=cl.shape==='tree'?pick([1,3,5]):cl.shape==='radial'?pick([0,2,4]):cl.shape==='mesh'?pick([1,2,4,5]):R(6);
@@ -202,7 +202,7 @@ function spawnScribe(x,y,tribe,role){
  return {x,y,px:x,py:y,a:random()*TAU,tribe,role,age:0,life:between(12,58),speed:between(.00016,.00042),weight:between(.0007,.0024),phase:random()*TAU,steps:0,alive:true};
 }
 function seedScribes(){
- for(let i=0;i<24;i++){const cl=pick(clusters);scribes.push(spawnScribe(cl.cx+between(-cl.rx,cl.rx),cl.cy+between(-cl.ry,cl.ry),cl.tribe,R(5)))}
+ for(let i=0;i<36;i++){const cl=pick(clusters);scribes.push(spawnScribe(cl.cx+between(-cl.rx,cl.rx),cl.cy+between(-cl.ry,cl.ry),cl.tribe,R(5)))}
 }
 function updateScribes(dt){
  for(const s of scribes){
@@ -224,7 +224,7 @@ function updateScribes(dt){
   if(s.age>s.life)s.alive=false;
  }
  scribes=scribes.filter(s=>s.alive);
- while(scribes.length<18){const n=pick(nodes.filter(n=>n.alive));if(n)scribes.push(spawnScribe(n.x,n.y,n.tribe,R(5)))}
+ while(scribes.length<28){const n=pick(nodes.filter(n=>n.alive));if(n)scribes.push(spawnScribe(n.x,n.y,n.tribe,R(5)))}
 }
 function drawCurrent(){
  liveCtx.clearRect(0,0,W,H);
@@ -346,7 +346,7 @@ function update(dt){
  worldCtx.save();worldCtx.globalAlpha=.09;for(const e of edges){if(e.alive===false)continue;const a=get(e.a),b=get(e.b);if(!a||!b)continue;worldCtx.strokeStyle=ink;worldCtx.lineWidth=Math.max(.5,e.width*S*.35);worldCtx.beginPath();worldCtx.moveTo(a.px*W,a.py*H);worldCtx.lineTo(a.x*W,a.y*H);worldCtx.stroke()}worldCtx.restore();
  if(t>=nextEvent){rareEvent();nextEvent=t+between(.65,3.8)}
  if(t>=nextBirth){grow();nextBirth=t+between(.35,2.1)}
- if(t>=nextFragment){const cl=pick(clusters);if(cl){fragments.push(makeFragment(cl,cl.cx+between(-cl.rx,cl.rx),cl.cy+between(-cl.ry,cl.ry),between(.025,.16),R(6),random()<.78?ink:paper));if(fragments.length>76)fragments.splice(0,fragments.length-76)}nextFragment=t+between(.8,4.5)}
+ if(t>=nextFragment){const cl=pick(clusters);if(cl){fragments.push(makeFragment(cl,cl.cx+between(-cl.rx,cl.rx),cl.cy+between(-cl.ry,cl.ry),between(.025,.16),R(6),random()<.78?ink:paper));if(fragments.length>118)fragments.splice(0,fragments.length-118)}nextFragment=t+between(.8,4.5)}
  if(t>=nextPigment){if(random()<.8)pigmentEvent();nextPigment=t+between(2.8,10)}
  if(t>=nextVortex){const v=pick(vortices);v.x=between(W*.08,W*.92);v.y=between(H*.08,H*.92);v.r=between(S*.04,S*.2);v.power=between(-.9,.9);nextVortex=t+between(4,16)}
  if(t>=nextMemory){memories.push({t,frame:frameNo});if(memories.length>6)memories.shift();nextMemory=t+between(15,35)}
