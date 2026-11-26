@@ -17,7 +17,7 @@ const sets={
 };
 const version=sets[round]?round:'15',files={'15':'organisms.html','14':'organisms.html','13':'ecologies.html','13':'ecologies.html','12':'dialect-studies.html','11':'syntax-studies.html','10':'paradox-studies.html','9':'topology.html','8':'living-v8.html','7':'living-v7.html','6':'living.html'};
 document.querySelector('header span').textContent='V'+version+' — '+sets[version].length+' LIVE SYSTEMS';
-if(version==='13')document.body.classList.add('ecologies');
+if(version==='13'||version==='15')document.body.classList.add('ecologies');
 const cards=[];
 const activeFull=()=>document.fullscreenElement||document.webkitFullscreenElement;
 function sync(p){let f=p.querySelector('iframe'),full=activeFull();if(f&&f.contentWindow){f.contentWindow.postMessage({type:'study-visibility',visible:full?full===p:p.dataset.visible==='1'},location.origin);f.contentWindow.postMessage({type:'study-quality',fullscreen:full===p},location.origin)}}
