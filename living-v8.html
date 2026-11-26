@@ -2,7 +2,7 @@
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>LifeAfterLogic / Broken Logic</title>
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;overscroll-behavior:none}
-canvas{display:block;width:100%;height:100%;image-rendering:pixelated;pointer-events:none}
+canvas{display:block;width:100%;height:100%;image-rendering:auto;pointer-events:none}
 #err{position:fixed;left:12px;bottom:12px;color:#ccc;font:12px monospace;max-width:90vw}
 #err:empty{display:none}
 </style>
@@ -503,14 +503,16 @@ function mutate(){
  gl.drawArrays(gl.TRIANGLES,0,3);read=1-read;
 }
 function draw(){gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.useProgram(show);bind(targets[read],0,du.tex);gl.uniform2f(du.view,canvas.width,canvas.height);gl.drawArrays(gl.TRIANGLES,0,3);}
-function frame(now){let dt=last?Math.min(now-last,100):0;last=now;if(!paused&&!document.hidden){age+=dt/1000;if(age>=nextEntropy){entropy=Math.floor(fresh()*100000000);nextEntropy=age+.6+fresh()*2.8;}if(age>=nextFracture)newFracture();if(age>=nextEvent){evolve();spectralEvent();}phenomena();chaosEvent();climateEvent();deepMemory();acc=Math.min(acc+dt,100);let n=0;while(acc>=1000/((preview&&!fullQuality)?18:30)&&n<((preview&&!fullQuality)?1:2)){mutate();acc-=1000/((preview&&!fullQuality)?18:30);n++;}if(n)draw()}requestAnimationFrame(frame)}
+function frame(now){let dt=last?Math.min(now-last,100):0;last=now;if(!paused&&!document.hidden){age+=dt/1000;if(age>=nextEntropy){entropy=Math.floor(fresh()*100000000);nextEntropy=age+.6+fresh()*2.8;}if(age>=nextFracture)newFracture();if(age>=nextEvent){evolve();spectralEvent();}phenomena();chaosEvent();climateEvent();deepMemory();acc=Math.min(acc+dt,100);let n=0;while(acc>=1000/((preview&&!fullQuality)?24:30)&&n<((preview&&!fullQuality)?1:2)){mutate();acc-=1000/((preview&&!fullQuality)?24:30);n++;}if(n)draw()}requestAnimationFrame(frame)}
 window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===parent&&e.data&&e.data.type==='study-visibility'){paused=!e.data.visible;last=0}});
 
 let fullQuality=false;
 function resolutionFor(w,h,high){
  const coarse=matchMedia('(pointer:coarse)').matches;
- const pixels=high?(coarse?1250000:3686400):165000;
- const maxW=high?(coarse?1800:2560):1500,maxH=high?(coarse?1800:1440):1080;
+ // Keep gallery previews genuinely detailed; fullscreen uses a larger native simulation.
+ const pixels=high?(coarse?1600000:5500000):(coarse?480000:1100000);
+ const maxW=high?(coarse?2000:3200):(coarse?1200:1920);
+ const maxH=high?(coarse?1700:2000):(coarse?1000:1200);
  const k=Math.min(1,maxW/w,maxH/h,Math.sqrt(pixels/(w*h)));
  return [Math.max(2,Math.round(w*k)),Math.max(2,Math.round(h*k))];
 }
