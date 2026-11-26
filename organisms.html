@@ -164,13 +164,13 @@ function smallGlyph(c,x,y,s,a,col,kind){
 function makeFragment(cl,x,y,size,kind,fill){
  const count=7+R(8),points=[];
  for(let i=0;i<count;i++){const a=i/count*TAU+between(-.12,.12),rad=between(.48,.92);points.push([Math.cos(a)*rad,Math.sin(a)*rad*.72])}
- const details=Array.from({length:32},()=>({x:between(-.48,.48),y:between(-.34,.34),w:between(.018,.16),h:between(.006,.045),a:between(-.8,.8),k:R(4)}));
+ const details=Array.from({length:22},()=>({x:between(-.48,.48),y:between(-.34,.34),w:between(.018,.16),h:between(.006,.045),a:between(-.8,.8),k:R(4)}));
  const cuts=Array.from({length:1+R(4)},()=>({x:between(-.35,.35),y:between(-.25,.25),w:between(.06,.22),h:between(.025,.12),a:between(-1.2,1.2)}));
  return {id:random(),cluster:cl.id,x,y,size,kind,fill,points,details,cuts,angle:between(-1.4,1.4),phase:random()*TAU,born:t,life:between(40,150),tribe:cl.tribe};
 }
 function seedFragments(){
  for(const cl of clusters){
-  const count=10+R(9);
+  const count=8+R(7);
   for(let i=0;i<count;i++){
    const x=cl.cx+between(-cl.rx*.9,cl.rx*.9),y=cl.cy+between(-cl.ry*.9,cl.ry*.9);
    const size=i<2?between(.11,.19):between(.035,.105),kind=cl.shape==='tree'?pick([1,3,5]):cl.shape==='radial'?pick([0,2,4]):cl.shape==='mesh'?pick([1,2,4,5]):R(6);
@@ -183,7 +183,7 @@ function drawFragment(c,f){
  const x=(f.x+Math.sin(t*.21+f.phase)*.0018)*W,y=(f.y+Math.cos(t*.17+f.phase)*.0015)*H,s=f.size*S*(1+.035*Math.sin(t*.5+f.phase)),contrast=f.fill===ink?chalk:ink;
  c.save();c.globalAlpha=alpha;c.translate(x,y);c.rotate(f.angle+Math.sin(t*.18+f.phase)*.018);c.scale(s,s);
  c.beginPath();f.points.forEach((p,i)=>i?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1]));c.closePath();c.fillStyle=f.fill;c.fill();c.clip();
- c.strokeStyle=contrast;c.fillStyle=contrast;c.lineWidth=Math.max(.0018,1.15/S*s);
+ c.strokeStyle=contrast;c.fillStyle=contrast;c.lineWidth=Math.max(.006,1.15/s);
  if(f.kind===0||f.kind===4){
   for(let yy=-.52;yy<.52;yy+=.035+f.size*.015){let shift=Math.sin(yy*18+f.phase)*.08;c.beginPath();c.moveTo(-.56,yy);c.lineTo(.56,yy+shift);c.stroke()}
   if(f.kind===4)for(let xx=-.5;xx<.5;xx+=.07){c.beginPath();c.moveTo(xx,-.5);c.lineTo(xx+.18,.5);c.stroke()}
@@ -192,7 +192,7 @@ function drawFragment(c,f){
  }else if(f.kind===2){
   for(let k=0;k<7;k++){let z=.12+k*.105;c.beginPath();c.moveTo(-z,-z*.55);c.lineTo(-z,z*.45);c.lineTo(z*.7,z*.45);c.lineTo(z*.7,-z);c.stroke()}
  }else{
-  for(const d of f.details){smallGlyph(c,d.x,d.y,Math.max(.025,d.w*.8),d.a,contrast,d.k)}
+  for(const d of f.details){c.save();c.translate(d.x,d.y);c.rotate(d.a);c.lineWidth=.018;c.beginPath();if(d.k===0){c.moveTo(-d.w*.5,d.h*.5);c.lineTo(-d.w*.5,-d.h);c.lineTo(d.w*.5,-d.h)}else if(d.k===1){c.moveTo(-d.w*.5,-d.h);c.lineTo(d.w*.5,d.h);c.lineTo(d.w*.5,-d.h)}else if(d.k===2){c.moveTo(-d.w*.5,0);c.lineTo(d.w*.5,0);c.moveTo(0,-d.h);c.lineTo(0,d.h)}else{c.arc(0,0,d.w*.3,0,5.2)}c.stroke();c.restore()}
  }
  for(const cut of f.cuts){c.save();c.translate(cut.x,cut.y);c.rotate(cut.a);c.fillStyle=f.fill===ink?paper:ink;c.beginPath();c.moveTo(-cut.w,-cut.h);c.lineTo(cut.w*.8,-cut.h*.7);c.lineTo(cut.w,cut.h*.6);c.lineTo(-cut.w*.5,cut.h);c.closePath();c.fill();c.restore()}
  c.restore();
@@ -346,7 +346,7 @@ function update(dt){
  worldCtx.save();worldCtx.globalAlpha=.09;for(const e of edges){if(e.alive===false)continue;const a=get(e.a),b=get(e.b);if(!a||!b)continue;worldCtx.strokeStyle=ink;worldCtx.lineWidth=Math.max(.5,e.width*S*.35);worldCtx.beginPath();worldCtx.moveTo(a.px*W,a.py*H);worldCtx.lineTo(a.x*W,a.y*H);worldCtx.stroke()}worldCtx.restore();
  if(t>=nextEvent){rareEvent();nextEvent=t+between(.65,3.8)}
  if(t>=nextBirth){grow();nextBirth=t+between(.35,2.1)}
- if(t>=nextFragment){const cl=pick(clusters);if(cl){fragments.push(makeFragment(cl,cl.cx+between(-cl.rx,cl.rx),cl.cy+between(-cl.ry,cl.ry),between(.025,.16),R(6),random()<.78?ink:paper));if(fragments.length>100)fragments.splice(0,fragments.length-100)}nextFragment=t+between(.8,4.5)}
+ if(t>=nextFragment){const cl=pick(clusters);if(cl){fragments.push(makeFragment(cl,cl.cx+between(-cl.rx,cl.rx),cl.cy+between(-cl.ry,cl.ry),between(.025,.16),R(6),random()<.78?ink:paper));if(fragments.length>76)fragments.splice(0,fragments.length-76)}nextFragment=t+between(.8,4.5)}
  if(t>=nextPigment){if(random()<.8)pigmentEvent();nextPigment=t+between(2.8,10)}
  if(t>=nextVortex){const v=pick(vortices);v.x=between(W*.08,W*.92);v.y=between(H*.08,H*.92);v.r=between(S*.04,S*.2);v.power=between(-.9,.9);nextVortex=t+between(4,16)}
  if(t>=nextMemory){memories.push({t,frame:frameNo});if(memories.length>6)memories.shift();nextMemory=t+between(15,35)}
