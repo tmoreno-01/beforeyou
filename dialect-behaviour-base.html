@@ -406,27 +406,120 @@ function spectralEvent(){
  }
  pigmentUpload();
 }
+function updateMood(){
+ const dt=Math.min(.25,Math.max(0,age-lastMoodTick));lastMoodTick=age;
+ for(let i=0;i<moods.length;i++)moods[i]+=(moodTargets[i]-moods[i])*(1-Math.exp(-dt*.12));
+ if(age>=nextMood){
+  const names=['curiosity','obsession','paranoia','repair','expansion','erosion','rebellion'];let i=R(names.length);moodName=names[i];moodTargets.fill(.12+rand()*.22);moodTargets[i]=.78+rand()*.22;
+  if(rand()<.32){let j=R(names.length);if(j!==i)moodTargets[j]=.55+rand()*.3}
+  nextMood=age+12+Math.pow(rand(),1.4)*37;
+ }
+}
+function boxAt(x,y){
+ let px=x*W,py=y*H;return boxes.find(b=>px>=b.x&&px<b.x+b.w&&py>=b.y&&py<b.y+b.h)||null;
+}
+function mutateDialect(d){
+ d.code=(d.code^(1<<R(9)))||1;d.slant=Math.max(-.65,Math.min(.65,d.slant+(rand()-.5)*.22));d.spacing=Math.max(.65,Math.min(1.55,d.spacing+(rand()-.5)*.16));
+ d.weight=Math.max(1,Math.min(4,d.weight+(rand()-.5)*1.1));d.connect=Math.max(0,Math.min(1,(d.connect??.5)+(rand()-.5)*.2));d.risk=Math.max(0,Math.min(1,(d.risk??.5)+(rand()-.5)*.2));
+}
+function conversation(){
+ if(boxes.length<2)return;let a=chooseBox(),near=boxes.filter(b=>b!==a&&adjacentLoose(a,b));if(!near.length)return;
+ let b=pick(near),family=dialects[a.dialect]||dialects[0];if(!family)return;
+ let trait=R(5);
+ if(trait===0)b.gene=(b.gene^(1<<R(5)))&31;
+ if(trait===1)b.role=rand()<.38?a.role:b.role;
+ if(trait===2)b.dialect=a.dialect;
+ if(trait===3){b.speed=Math.round(b.speed*.65+a.speed*.35);b.porosity=Math.round(b.porosity*.7+a.porosity*.3)}
+ if(trait===4)b.kind=chooseKind(a.role,[a.kind,...rolePools[a.role]]);
+ if(rand()<.38)mutateDialect(family);
+ genome(b);paint(b,true);rememberEvent(a,'conversation',b);rememberEvent(b,'inherited-from',a);
+}
+function learnPass(){
+ for(let i=0;i<kindUse.length;i++)kindUse[i]*=.88;
+ let ranked=boxes.map(b=>{
+  let near=boxes.filter(q=>q!==b&&adjacentLoose(b,q)),different=near.filter(q=>q.role!==b.role||q.kind!==b.kind).length;
+  let diversity=near.length?different/near.length:.5,novel=1/(1+kindUse[b.kind]*.3),size=Math.min(1,(b.w*b.h)/(W*H)*24);
+  let score=.36*diversity+.34*novel+.18*(b.fitness??.5)+.12*(1-size);
+  b.novelty=novel;b.fitness=(b.fitness??.5)*.78+score*.22;return {b,score};
+ }).sort((a,b)=>b.score-a.score);
+ if(ranked.length>3&&rand()<profile.learning*.9){
+  let source=ranked[R(Math.min(5,ranked.length))].b,target=ranked[ranked.length-1-R(Math.min(4,ranked.length-1))].b;
+  if(source!==target&&rand()<.8){
+   if(rand()<.45)target.role=source.role;
+   if(rand()<.65)target.dialect=source.dialect;
+   target.gene=(source.gene^(1<<R(5)))&31;
+   if(rand()<.5)target.kind=chooseKind(source.role,[source.kind,...rolePools[source.role]]);
+   target.fitness=Math.max(target.fitness??0,source.fitness*.72);paint(target,true);genome(target);rememberEvent(target,'learned-from',source);
+  }
+ }
+ nextLearning=age+(4+rand()*9)/profile.learning;
+}
+function agentTextureUpload(){
+ if(!agentCanvas||!agentTex)return;gl.activeTexture(gl.TEXTURE6);gl.bindTexture(gl.TEXTURE_2D,agentTex);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,gl.RGBA,gl.UNSIGNED_BYTE,agentCanvas);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+}
+function makeAgents(){
+ agents=[];for(let i=0;i<14;i++)agents.push({role:i%8,x:rand()*.9+.05,y:rand()*.9+.05,angle:rand()*Math.PI*2,speed:.008+rand()*.025,energy:.5+rand()*.5,trail:rand(),target:null,nextAct:age+rand()*5,home:rand()*.5+.25,phase:rand()*Math.PI*2});
+}
+function agentAction(a,b){
+ if(!b||age<a.nextAct)return;
+ a.nextAct=age+(1.8+rand()*8)/(profile.agents*(.8+moods[0]*.4+moods[6]*.35));
+ const other=pick(boxes),neighbours=boxes.filter(q=>q!==b&&adjacentLoose(b,q));
+ if(a.role===0){b.kind=chooseKind(0,rolePools[0]);b.gene=(b.gene^(1<<R(5)))&31;b.dialect=R(dialects.length);paint(b,true);genome(b);rememberEvent(b,'scribe')}
+ if(a.role===1){let old=shortMemory.length?pick(shortMemory):null;if(old){b.gene=(old.gene^(1<<R(5)))&31;b.role=old.role;b.dialect=old.dialect;b.kind=old.kind;paint(b,true);genome(b);rememberEvent(b,'recalled')}else{b.kind=chooseKind(1,rolePools[1]);paint(b,true)}}
+ if(a.role===2&&neighbours.length){let n=pick(neighbours);b.gene=(n.gene^(1<<R(5)))&31;b.dialect=n.dialect;b.role=2;if(rand()<.5)b.kind=chooseKind(2,rolePools[2]);paint(b,true);genome(b);rememberEvent(b,'repair',n)}
+ if(a.role===3){b.bg=1-b.bg;b.fg=1-b.fg;b.kind=chooseKind(3,rolePools[3]);b.porosity=Math.max(18,b.porosity-24);paint(b,true);genome(b);rememberEvent(b,'redaction')}
+ if(a.role===4&&other!==b){b.dialect=other.dialect;b.role=rand()<.55?other.role:4;b.gene=(other.gene^(1<<R(5)))&31;b.kind=chooseKind(b.role,[other.kind,...rolePools[b.role]]);paint(b,true);genome(b);rememberEvent(b,'parasitic-copy',other)}
+ if(a.role===5){a.target={x:(other.x+other.w*.5)/W,y:(other.y+other.h*.5)/H};if(neighbours.length){let n=pick(neighbours);n.speed=Math.min(250,n.speed+18);genome(n);rememberEvent(n,'migration')} }
+ if(a.role===6){b.palette=4+R(palettes.length-4);paint(b,true);pigments.set(b.id,{box:b,palette:b.palette,start:age,end:age+5+rand()*14});rememberEvent(b,'pigment')}
+ if(a.role===7){for(let n=0;n<2&&neighbours.length;n++){let q=pick(neighbours);mutateGene(q);q.kind=chooseKind(7,rolePools[7]);paint(q,true);rememberEvent(q,'catalyst',b)}moodTargets[6]=Math.min(1,moodTargets[6]+.24)}
+}
+function updateAgents(){
+ if(!agentCtx||age<nextAgentUpdate)return;
+ let dt=Math.max(.05,Math.min(.7,age-agentClock));agentClock=age;nextAgentUpdate=age+.10+rand()*.18;
+ const c=agentCtx,N=agentCanvas.width;
+ c.save();c.globalCompositeOperation='destination-out';c.fillStyle='rgba(0,0,0,.035)';c.fillRect(0,0,N,N);c.restore();c.globalCompositeOperation='source-over';
+ for(let k=0;k<agents.length;k++){
+  let a=agents[(agentCursor++)%agents.length],b=boxAt(a.x,a.y)||chooseBox(),oldX=a.x,oldY=a.y;
+  let curiosity=moods[0],obsession=moods[1],paranoia=moods[2],rebellion=moods[6];
+  if(a.target&&rand()<.75){let dx=a.target.x-a.x,dy=a.target.y-a.y;a.angle=Math.atan2(dy,dx)+(rand()-.5)*(.25+paranoia*.9)}else a.angle+=(rand()-.5)*(1.0+paranoia*1.5)+(curiosity-.4)*.12;
+  let speed=a.speed*(.6+curiosity*.7+rebellion*.55)*dt;
+  a.x+=Math.cos(a.angle)*speed;a.y+=Math.sin(a.angle)*speed;
+  if(a.x<.01||a.x>.99||a.y<.01||a.y>.99){a.angle+=Math.PI*(.65+rand()*.7);a.x=clamp(a.x,.01,.99);a.y=clamp(a.y,.01,.99)}
+  if(rand()<.018+obsession*.035)a.target=null;
+  const x=oldX*N,y=oldY*N,xx=a.x*N,yy=a.y*N;
+  c.save();c.globalAlpha=.28+rand()*.48;c.lineWidth=.65+rand()*2.1;c.lineCap=pick(['square','butt']);c.strokeStyle=a.role===6&&rand()<.13?pick(palettes[4+R(5)]):pick(['#101010','#101010','#f5f5f2']);c.beginPath();c.moveTo(x,y);
+  if(a.role===5||a.role===7){let mx=(x+xx)*.5+Math.cos(a.angle+1.1)*N*(.002+rand()*.012),my=(y+yy)*.5+Math.sin(a.angle+1.1)*N*(.002+rand()*.012);c.lineTo(mx,my)}
+  c.lineTo(xx,yy);c.stroke();
+  if(rand()<.14){let z=2+rand()*8;c.beginPath();c.moveTo(xx-z,yy);c.lineTo(xx-z,yy-z);c.lineTo(xx+z*.6,yy-z);c.lineTo(xx+z*.6,yy+z*.5);c.stroke()}
+  if(rand()<.035){c.fillStyle=c.strokeStyle;c.fillRect(xx-2,yy-2,4,4)}
+  c.restore();
+  if(rand()<.18)agentAction(a,b);
+ }
+ if(age>=nextAgentUpload){agentTextureUpload();nextAgentUpload=age+.55}
+}
 function livingEvents(){
+ updateMood();updateAgents();if(age>=nextLearning)learnPass();
+ if(age>=nextConversation){conversation();nextConversation=age+(1+rand()*3.5)/(profile.network*(.7+moods[0]*.6))}
  if(age>=nextPressure){pressureStart=age;pressureEnd=age+4+rand()*18;pressurePeak=(.3+rand()*.65)*profile.network;nextPressure=pressureEnd+9+rand()*34;burst=2+R(6)}
  pressure=age<pressureEnd?Math.sin(Math.PI*Math.max(0,Math.min(1,(age-pressureStart)/(pressureEnd-pressureStart))))*pressurePeak:0;
  if(age>=nextSignal){signalStart=age;signalEnd=age+6+rand()*14;nextSignal=signalEnd+4+rand()*21;signalA=[.1+rand()*.8,.1+rand()*.8,.05,0];signalB=[.1+rand()*.8,.1+rand()*.8,0,0]}
  if(age<signalEnd){let u=(age-signalStart)/(signalEnd-signalStart);signalA[2]=.03+u*.27;signalA[3]=Math.sin(Math.PI*Math.max(0,Math.min(1,u)))}else signalA[3]=0;
  if(age>=nextDialect){
-  let d=pick(dialects);d.code=(d.code^(1<<R(9)))||1;d.slant=Math.max(-.5,Math.min(.5,d.slant+(rand()-.5)*.28));d.spacing=Math.max(.7,Math.min(1.5,d.spacing+(rand()-.5)*.2));
-  let b=pick(boxes);if(b){b.dialect=R(dialects.length);b.kind=52+R(6);paint(b,true)}
+  let d=pick(dialects);mutateDialect(d);
+  let b=chooseBox();if(b){b.dialect=R(dialects.length);b.role=R(8);b.kind=chooseKind(b.role,rolePools[b.role]);paint(b,true);genome(b);rememberEvent(b,'dialect-mutation')}
   nextDialect=age+(2+rand()*10)/profile.language;
  }
  if(age>=nextContact){
-  let b=pick(boxes);if(b){let near=boxes.filter(q=>q!==b&&adjacentLoose(b,q));if(near.length){let q=pick(near);q.gene=(b.gene+R(5))%32;q.dialect=b.dialect??R(dialects.length);if(rand()<.38*profile.language){q.kind=52+R(6);paint(q,true)}else genome(q)}}
+  let b=chooseBox();if(b){let near=boxes.filter(q=>q!==b&&adjacentLoose(b,q));if(near.length){let q=pick(near);q.gene=(b.gene^(1<<R(5)))&31;q.dialect=b.dialect??R(dialects.length);if(rand()<.38*profile.language){q.role=b.role;q.kind=chooseKind(q.role,rolePools[q.role]);paint(q,true)}genome(q);rememberEvent(b,'contact',q)}}
   nextContact=age+(1+rand()*5)/Math.max(.25,profile.network);
  }
  // Invisible writers make short, changing trails through the original fracture field.
  if(age>=nextWander&&fractureCtx){
-  if(!walkers.length)for(let i=0;i<5;i++)walkers.push({x:rand()*W,y:rand()*H,a:rand()*6.28,code:R(511)});
+  if(!walkers.length)for(let i=0;i<3;i++)walkers.push({x:rand()*W,y:rand()*H,a:rand()*6.28,code:R(511)});
   const c=fractureCtx,S=Math.min(W,H);c.save();c.globalCompositeOperation='source-over';
   for(const w of walkers){let x=w.x,y=w.y;w.a+=(rand()-.5)*1.4;let k=S*(.008+rand()*.022);w.x=Math.max(0,Math.min(W,x+Math.cos(w.a)*k));w.y=Math.max(0,Math.min(H,y+Math.sin(w.a)*k));c.strokeStyle=c.fillStyle=rand()<.5?'#101010':'#f5f5f2';c.lineWidth=Math.max(1,S*.002);c.globalAlpha=.65+rand()*.3;c.beginPath();c.moveTo(x,y);c.lineTo(w.x,w.y);c.stroke();if(rand()<.22){c.fillRect(w.x,w.y,k,Math.max(1,k*.1));c.fillRect(w.x,w.y,Math.max(1,k*.1),k*.7)}if(rand()<.035){w.x=rand()*W;w.y=rand()*H}}
   c.restore();let data=c.getImageData(0,0,W,H).data,flipped=new Uint8Array(data.length);for(let y=0;y<H;y++)flipped.set(data.subarray(y*W*4,(y+1)*W*4),(H-y-1)*W*4);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,fractureField);gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,W,H,gl.RGBA,gl.UNSIGNED_BYTE,flipped);
-  nextWander=age+(1.2+rand()*2.8)/profile.language;
+  nextWander=age+(2.4+rand()*4.5)/profile.language;
  }
 }
 function climateEvent(){
@@ -434,12 +527,12 @@ function climateEvent(){
 }
 function deepMemory(){
  if(age<nextSnapshot)return;
- nextSnapshot=age+35+rand()*60;
+ nextSnapshot=age+(35+rand()*60)/profile.memory;
  // A bounded history of actual GPU feedback, copied without CPU readback.
  let tex=snapshots[archiveIndex];gl.bindFramebuffer(gl.FRAMEBUFFER,fb[read]);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
  gl.copyTexSubImage2D(gl.TEXTURE_2D,0,0,0,0,0,W,H);
  archiveIndex=(archiveIndex+1)%snapshots.length;
- let b=pick(boxes),older=snapshots[archiveIndex];let temp=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,temp);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,older,0);
+ let b=chooseBox(),older=snapshots[archiveIndex];let temp=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,temp);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,older,0);
  gl.bindTexture(gl.TEXTURE_2D,archive);gl.copyTexSubImage2D(gl.TEXTURE_2D,0,b.x,H-b.y-b.h,b.x,H-b.y-b.h,b.w,b.h);gl.deleteFramebuffer(temp);
 }
 function newFracture(){
@@ -467,20 +560,20 @@ function newFracture(){
 }
 function rebuild(change=false){
  if(change||!seed)seed=(crypto.getRandomValues(new Uint32Array(1))[0]>>>0)||1;
- rand=fresh;layout=profile.layout;dialects=Array.from({length:8},()=>({code:1+R(510),slant:(rand()-.5)*.5,spacing:.8+rand()*.5,weight:1+R(3)}));pigments.clear();walkers=[];nextDialect=2;nextContact=1;nextWander=3;nextSignal=3;nextPressure=5;paletteIndex=R(4);era=0;nextColour=2+rand()*10;colourID=0;colourEnd=0;nextWeather=5+rand()*10;weather=0;burst=0;nextSnapshot=25+rand()*30;archiveIndex=0;
+ rand=fresh;layout=profile.layout;dialects=Array.from({length:8},()=>({code:1+R(510),slant:(rand()-.5)*.5,spacing:.8+rand()*.5,weight:1+R(3),connect:rand(),risk:rand(),memory:rand(),colour:rand()}));pigments.clear();walkers=[];shortMemory=[];kindUse.fill(0);kindHistory=[];moods=[.55,.24,.2,.42,.38,.2,.28];moodTargets=moods.slice();moodName='curiosity';nextMood=12+rand()*12;lastMoodTick=0;nextLearning=2+rand()*3;nextConversation=1;nextAgentUpdate=0;nextAgentUpload=0;agentClock=0;agentCursor=0;nextDialect=2;nextContact=1;nextWander=3;nextSignal=3;nextPressure=5;paletteIndex=R(4);era=0;nextColour=2+rand()*10;colourID=0;colourEnd=0;nextWeather=5+rand()*10;weather=0;burst=0;nextSnapshot=25+rand()*30;archiveIndex=0;
  let r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);
  canvas.width=Math.max(2,Math.round(r.width*d));canvas.height=Math.max(2,Math.round(r.height*d));
  [W,H]=resolutionFor(canvas.width,canvas.height,!preview||fullQuality);
- [...targets,base,regions,archive,fractureField,pigmentTex,...snapshots].filter(Boolean).forEach(t=>gl.deleteTexture(t));fb.forEach(t=>gl.deleteFramebuffer(t));
+ [...targets,base,regions,archive,fractureField,pigmentTex,agentTex,...snapshots].filter(Boolean).forEach(t=>gl.deleteTexture(t));fb.forEach(t=>gl.deleteFramebuffer(t));
  baseData=new Uint8Array(W*H*4);fieldData=new Uint8Array(W*H*4);memoryData=new Uint8Array(W*H*4);initAtlas();
- base=texture(baseData);regions=texture(fieldData);archive=texture(memoryData);fractureField=texture(null);pigmentTex=gl.createTexture();gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,pigmentTex);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);pigmentBytes.fill(0);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,256,1,0,gl.RGBA,gl.UNSIGNED_BYTE,pigmentBytes);fractureCanvas=document.createElement('canvas');fractureCanvas.width=W;fractureCanvas.height=H;fractureCtx=fractureCanvas.getContext('2d',{willReadFrequently:true});snapshots.length=0;for(let i=0;i<3;i++)snapshots.push(texture(baseData));
+ base=texture(baseData);regions=texture(fieldData);archive=texture(memoryData);fractureField=texture(null);pigmentTex=gl.createTexture();gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,pigmentTex);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);pigmentBytes.fill(0);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,256,1,0,gl.RGBA,gl.UNSIGNED_BYTE,pigmentBytes);fractureCanvas=document.createElement('canvas');fractureCanvas.width=W;fractureCanvas.height=H;fractureCtx=fractureCanvas.getContext('2d',{willReadFrequently:true});agentCanvas=document.createElement('canvas');agentCanvas.width=1024;agentCanvas.height=1024;agentCtx=agentCanvas.getContext('2d');agentTex=gl.createTexture();gl.activeTexture(gl.TEXTURE6);gl.bindTexture(gl.TEXTURE_2D,agentTex);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,1024,1024,0,gl.RGBA,gl.UNSIGNED_BYTE,null);makeAgents();snapshots.length=0;for(let i=0;i<3;i++)snapshots.push(texture(baseData));
  let initial=baseData.slice();for(let i=3;i<initial.length;i+=4)initial[i]=0;
  targets=[texture(initial),texture(initial)];fb=targets.map(t=>{let a=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,a);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('Framebuffer incomplete');return a});
  read=0;step=0;acc=0;last=0;age=0;epoch=0;events=0;nextEvent=.4+rand()*2;entropy=Math.floor(fresh()*100000000);nextEntropy=0;newFracture();draw();
 }
 function mutate(){
  gl.useProgram(sim);gl.bindFramebuffer(gl.FRAMEBUFFER,fb[1-read]);gl.viewport(0,0,W,H);
- bind(targets[read],0,su.prev);bind(base,1,su.original);bind(regions,2,su.field);bind(archive,3,su.memoryTex);bind(fractureField,4,su.fractures);bind(pigmentTex,5,su.pigmentMap);gl.uniform4fv(su.signalA,signalA);gl.uniform4fv(su.signalB,signalB);gl.uniform1f(su.pressure,pressure);gl.uniform1f(su.network,profile.network);gl.uniform1i(su.entropy,entropy);gl.uniform1f(su.fractureStrength,profile.fracture);gl.uniform1f(su.drift,profile.drift);gl.uniform1f(su.imprint,Math.min(1,(age-fractureAge)/2+0.05)*Math.min(1,(nextFracture-age)/3));
+ bind(targets[read],0,su.prev);bind(base,1,su.original);bind(regions,2,su.field);bind(archive,3,su.memoryTex);bind(fractureField,4,su.fractures);bind(pigmentTex,5,su.pigmentMap);bind(agentTex,6,su.agentsTex);gl.uniform4fv(su.moodA,moods.slice(0,4));gl.uniform4fv(su.moodB,[moods[4],moods[5],moods[6],profile.agents]);gl.uniform4fv(su.signalA,signalA);gl.uniform4fv(su.signalB,signalB);gl.uniform1f(su.pressure,pressure);gl.uniform1f(su.network,profile.network);gl.uniform1i(su.entropy,entropy);gl.uniform1f(su.fractureStrength,profile.fracture);gl.uniform1f(su.drift,profile.drift);gl.uniform1f(su.imprint,Math.min(1,(age-fractureAge)/2+0.05)*Math.min(1,(nextFracture-age)/3));
  gl.uniform2i(su.dim,W,H);if(++step>=1000000){step=0;epoch++}gl.uniform1i(su.tick,step);gl.uniform1f(su.key,(seed+epoch*131)%997);gl.uniform1i(su.climate,weather);gl.uniform1i(su.accentID,colourID);gl.uniform1i(su.study,variant);
  gl.drawArrays(gl.TRIANGLES,0,3);read=1-read;
 }
