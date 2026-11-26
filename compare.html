@@ -14,7 +14,7 @@ const version=sets[round]?round:'11',files={'11':'syntax-studies.html','10':'par
 document.querySelector('header span').textContent='V'+version+' — '+(sets[version].length+(version==='10'?1:version==='11'?2:0))+' LIVE SYSTEMS';
 const cards=[];
 const activeFull=()=>document.fullscreenElement||document.webkitFullscreenElement;
-function sync(p){let f=p.querySelector('iframe'),full=activeFull();if(f&&f.contentWindow)f.contentWindow.postMessage({type:'study-visibility',visible:full?full===p:p.dataset.visible==='1'},location.origin)}
+function sync(p){let f=p.querySelector('iframe'),full=activeFull();if(f&&f.contentWindow){f.contentWindow.postMessage({type:'study-visibility',visible:full?full===p:p.dataset.visible==='1'},location.origin);f.contentWindow.postMessage({type:'study-quality',fullscreen:full===p},location.origin)}}
 function load(p){let f=p.querySelector('iframe');if(!f){f=document.createElement('iframe');f.title=p.dataset.title;f.src=p.dataset.url;f.allowFullscreen=true;f.addEventListener('load',()=>sync(p));p.append(f)}sync(p)}
 const observer=new IntersectionObserver(entries=>{for(const e of entries){const p=e.target;p.dataset.visible=e.isIntersecting?'1':'0';if(e.isIntersecting)load(p);else sync(p)}},{rootMargin:'0px'});
 document.addEventListener('fullscreenchange',()=>cards.forEach(sync));document.addEventListener('webkitfullscreenchange',()=>cards.forEach(sync));
