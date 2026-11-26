@@ -149,7 +149,7 @@ void main(){
  // Locally propagated error instructions are read from an evolving excitable network.
  vec2 nerveUV=uv+vec2(sin(uv.y*43.+uv.x*11.),sin(uv.x*37.-uv.y*19.))*.0023;
  vec4 nerve=texture(nerveTex,clamp(nerveUV,vec2(0.),vec2(1.)));
- float excite=nerve.r*nervePower;
+ float excite=clamp(nerve.r*nervePower,0.,1.);
  float ageField=nerve.a;
  int law=int(round(nerve.b*255.));
  float ang=nerve.g*6.2831853;
@@ -168,9 +168,9 @@ void main(){
  if(law==0)jump=dir*(1.5+6.*excite);
  if(law==1)jump=dir*(2.+3.*excite)+nx*sign(seamNoise)*(2.+4.*excite);
  if(law==2)jump=dir*(1.+4.*excite)+nx*sign(sin(nAlong*.054+ageField*6.))*(1.+5.*excite);
- if(law==3){float pitch=6.+floor(ageField*17.);jump=dir*(mod(nAlong,pitch)-pitch*.5)*.70+nx*(1.+excite*3.);}
+ if(law==3){float pitch=(12.+floor(ageField*28.))*nScale;float fold=mod(nAlong+floor(nAcross/pitch)*pitch*.5,pitch)-pitch*.5;jump=ax*fold*(.65+excite*.7)/nScale+nx*(1.+excite*3.);}
  if(law==4)jump=dir*sign(sin(nAcross*.14))*7.*excite+nx*(2.+excite*4.);
- if(law==5)jump=dir*(3.+excite*5.)+nx*sin(nAlong*.085+ageField*9.)*5.;
+ if(law==5){float band=floor(nAcross/(3.+ageField*11.));jump=dir*(3.+excite*5.)+nx*(mod(band,3.)-1.)*(3.+excite*6.);}
  if(law==6)jump=nx*sign(sin(nAlong*.11+nAcross*.04))*(3.+7.*excite);
  if(law==7)jump=dir*(1.+6.*excite);
  if(law==8)jump=dir*(3.+9.*excite)+nx*2.;
@@ -187,7 +187,8 @@ void main(){
  // Each instruction acts on the actual image and changes the material subsequent instructions will see.
  if(excite>.04&&inside(sourceN)&&detail<nGate){
   vec3 sampleN=get(prev,sourceN).rgb;
-  if(law==0||law==1||law==2||law==3||law==4||law==5||law==6)v=sampleN;
+  if(law==0||law==1||law==2||law==3||law==4||law==5)v=sampleN;
+  if(law==6){float a0=dot(sampleN,vec3(.299,.587,.114)),a1=dot(old.rgb,vec3(.299,.587,.114));float a2=dot(get(prev,p+ivec2(round(nx*4.*nScale))).rgb,vec3(.299,.587,.114));float odd=mod(float(int(a0*7.)^int(a1*7.)),2.);v=(abs(a2-a0)>.18&&odd>.5)?vec3(1.-a0):sampleN;}
   if(law==7){ // Morphological shock: edge growth and edge recession, never blur.
    vec3 va=get(prev,p+ivec2(round(nx*nScale*2.))).rgb;
    vec3 vb=get(prev,p-ivec2(round(nx*nScale*2.))).rgb;
@@ -199,7 +200,7 @@ void main(){
    vec2 euv=clamp((vec2(sourceN)+.5)/vec2(dim),vec2(0.),vec2(1.));v=texture(echoTex,euv).rgb;
   }
   if(law==9){vec3 remembered=get(memoryTex,sourceN).rgb;float y0=dot(sampleN,vec3(.299,.587,.114));v=y0>.55?remembered:sampleN;}
-  if(law==10){float contrast=dot(sampleN,vec3(.299,.587,.114));v=contrast>.6?get(original,sourceN).rgb:sampleN;}
+  if(law==10){float contrast=dot(sampleN,vec3(.299,.587,.114));vec3 corrected=get(original,sourceN).rgb;float residual=abs(contrast-dot(corrected,vec3(.299,.587,.114)));v=residual>.24?corrected:sampleN;}
   if(law==11){float cut=sin(nAlong*.021+sin(nAcross*.047)*3.);v=cut>.1?sampleN:1.-sampleN;}
   live=max(live,excite*.43);
  }
@@ -665,6 +666,7 @@ function ignite(){
   let i=y*nerveW+x;if(rand()<.18)continue;nerve.heat[i]=.55+rand()*.45;nerve.rest[i]=0;nerve.angle[i]=(angle+6.283)%6.283;nerve.law[i]=kind;nerve.strain[i]=rand();
  }
 }
+const nerveDX=[1,1,0,-1,-1,-1,0,1],nerveDY=[0,1,1,1,0,-1,-1,-1];
 function updateNerves(){
  if(!nerve||age<nextNerveTick)return;
  nextNerveTick=age+.085+rand()*.035;
@@ -675,7 +677,7 @@ function updateNerves(){
   let maxSignal=0,parent=-1;
   if(rest<.10&&heat<.28){
    // directional contagion, with turns, collisions and a refractory period
-   for(let d=0;d<8;d++){let xx=x+[1,1,0,-1,-1,-1,0,1][d],yy=y+[0,1,1,1,0,-1,-1,-1][d];if(xx<0||xx>=w||yy<0||yy>=h)continue;let j=yy*w+xx;if(A.heat[j]<.42)continue;let dir=d*Math.PI/4+Math.PI,alignment=(1+Math.cos(dir-A.angle[j]))*.5;let signal=A.heat[j]*(.35+.65*alignment);if(signal>maxSignal){maxSignal=signal;parent=j}}
+   for(let d=0;d<8;d++){let xx=x+nerveDX[d],yy=y+nerveDY[d];if(xx<0||xx>=w||yy<0||yy>=h)continue;let j=yy*w+xx;if(A.heat[j]<.42)continue;let dir=d*Math.PI/4+Math.PI,alignment=(1+Math.cos(dir-A.angle[j]))*.5;let signal=A.heat[j]*(.35+.65*alignment);if(signal>maxSignal){maxSignal=signal;parent=j}}
   }
   if(heat>.035){heat*=.78+.12*strain;if(heat<.13)rest=Math.max(rest,.75+strain*.2)}
   else heat=0;
