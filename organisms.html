@@ -21,7 +21,7 @@ function sizeFor(){
 }
 function resize(){
  const [nw,nh]=sizeFor();if(nw===W&&nh===H&&world)return;
- const old=world,oldPigment=pigment,oldGrain=grain;W=nw;H=nh;S=Math.min(W,H);
+ const old=world,oldPigment=pigment,oldGrain=grain;W=nw;H=nh;S=Math.min(W,H);canvas.width=W;canvas.height=H;
  world=layer();worldCtx=context(world);live=layer();liveCtx=context(live);pigment=layer();pigmentCtx=context(pigment);grain=layer();grainCtx=context(grain);
  if(old){worldCtx.drawImage(old,0,0,W,H);pigmentCtx.drawImage(oldPigment,0,0,W,H);grainCtx.drawImage(oldGrain,0,0,W,H)}
  else{worldCtx.fillStyle=paper;worldCtx.fillRect(0,0,W,H);makeGrain()}
