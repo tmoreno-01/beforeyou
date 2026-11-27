@@ -149,6 +149,7 @@ const palettes=[
  ['#f5f5f2','#101010','#f15d15','#dededc','#757575','#b52c07']
 ];
 const R=n=>Math.floor(rand()*n), pick=a=>a[R(a.length)];
+const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
 function splitBox(box,ratio,vertical){
  let {x,y,w,h}=box,n=vertical?w:h;
  let k=Math.max(8,Math.min(n-8,Math.round(n*ratio)));
