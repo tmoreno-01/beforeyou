@@ -12,6 +12,7 @@ canvas{display:block;width:100%;height:100%;image-rendering:auto;pointer-events:
 <script>
 'use strict';
 const canvas=document.getElementById('art'), el=id=>document.getElementById(id);
+window.addEventListener('error',e=>{el('err').textContent=e.message||'Rendering failed';});window.addEventListener('unhandledrejection',e=>{el('err').textContent=String(e.reason?.message||e.reason);});
 const profiles=[
 {id:'faultline',name:'After All That / 71A — Faultline',variant:2,layout:5,density:1.08,fracture:.88,drift:.58,language:1.08,network:.68,colour:.88,memory:1.4,agents:1,learning:1.5,variance:1.20,territory:.48,motion:.4,weights:[1,1,1,1,1,1,1,1],vm:1.16,recall:1.55,evolveRate:1.15,driftTaste:1.65,predict:1.45,cooperate:1.65,cut:1.75,scar:1.15,focus:7,phaseStrength:1.55,adapt:1.35,contrast:1.05,form:0.38,flow:0.42,detail:0.72},
 {id:'interruption',name:'After All That / 71B — Interruption',variant:2,layout:5,density:1.08,fracture:.88,drift:.58,language:1.08,network:.68,colour:.88,memory:1.4,agents:1,learning:1.5,variance:1.20,territory:.48,motion:.4,weights:[1,1,1,1,1,1,1,1],vm:1.16,recall:1.55,evolveRate:1.15,driftTaste:1.65,predict:1.45,cooperate:1.65,cut:1.75,scar:1.15,focus:7,phaseStrength:1.55,adapt:1.35,contrast:1.05,form:0.65,flow:0.68,detail:0.9},
@@ -155,7 +156,7 @@ void main(){
  localMask=max(localMask,structure*.85);
  float activity=clamp(gate*pulse*(.37+rate*.55)*vmPower*(.55+control.r*.55)*speciesGate*wake*(.44+epochDrive*.72)*cadence*(.76+impulse*.48),0.,.90);
  float stable=rnd(ivec2(floor(vec2(u,w)/vec2(4.,3.))),zid*173+int(key));
- if(structure>.18){float coherent=fract((u+w*.23)/(6.+header.b*17.));stable=mix(stable,coherent,structure*.72*grammarPower);}
+ if(structure>.18){float coherentValue=fract((u+w*.23)/(6.+header.b*17.));stable=mix(stable,coherentValue,structure*.72*grammarPower);}
  vec3 v=old.rgb;
  ivec2 source=p+ivec2(round(address));
  if(stable<clamp(activity+structure*.12*grammarPower,0.,.94)&&localMask>.08){
@@ -258,7 +259,222 @@ void main(){
 const display=`#version 300 es
 precision highp float;uniform sampler2D tex;uniform vec2 viewSize;out vec4 outColor;void main(){outColor=texture(tex,gl_FragCoord.xy/viewSize);}`;
 function program(f){function sh(type,src){let s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}let p=gl.createProgram();let a=sh(gl.VERTEX_SHADER,vs),b=sh(gl.FRAGMENT_SHADER,f);gl.attachShader(p,a);gl.attachShader(p,b);gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));gl.deleteShader(a);gl.deleteShader(b);return p}
-const sim=program(fs),show=program(display),vao=gl.createVertexArray();gl.bindVertexArray(vao);
+let sim;try{sim=program(fs)}catch(e){console.warn('Extended shader failed, using V25 renderer',e);sim=program(`#version 300 es
+precision highp float;precision highp int;
+uniform sampler2D prev,original,field,fractures,pigmentMap,agentsTex;
+uniform sampler2D zoneTex,programTex,perceptTex,recallTex,brainTex;
+uniform sampler2D ecologyTex;uniform float cutPower;uniform float worldAge;uniform vec4 cutA[6];uniform vec4 cutB[6];uniform vec4 accentA[4];uniform vec4 accentB[4];uniform vec4 accentC[4];
+uniform ivec2 dim;uniform int tick,entropy;uniform float key,fractureStrength,imprint,vmPower,recallPower;
+out vec4 outColor;
+uint hash(uint x){x^=x>>16u;x*=0x7feb352du;x^=x>>15u;x*=0x846ca68bu;x^=x>>16u;return x;}
+float rnd(ivec2 p,int salt){return float(hash(uint(p.x)*1597334677u^uint(p.y)*3812015801u^uint(salt)*2891336453u)&65535u)/65535.;}
+ivec2 cp(ivec2 p){return clamp(p,ivec2(0),dim-1);}
+vec4 get(sampler2D tex,ivec2 p){return texelFetch(tex,cp(p),0);}
+float lum(vec3 c){return dot(c,vec3(.299,.587,.114));}
+vec2 rot(vec2 p,float a){float c=cos(a),s=sin(a);return vec2(c*p.x-s*p.y,s*p.x+c*p.y);}
+float signedUnit(float a){return a>.0?1.:-1.;}
+void main(){
+ ivec2 p=ivec2(gl_FragCoord.xy);vec2 z=vec2(p),uv=(z+.5)/vec2(dim);
+ vec4 old=get(prev,p),home=get(original,p),meta=get(field,p);
+ int id=int(round(meta.r*255.));
+ int zid=int(round(texture(zoneTex,uv).r*255.));
+ vec4 header=texelFetch(programTex,ivec2(10,zid),0);
+ vec4 control=texelFetch(brainTex,ivec2(0,zid),0),belief=texelFetch(brainTex,ivec2(1,zid),0),fault=texelFetch(brainTex,ivec2(2,zid),0);
+ vec4 limits=texelFetch(programTex,ivec2(11,zid),0);
+ int lengthCode=int(round(limits.r*255.));
+ vec4 eco=texelFetch(ecologyTex,ivec2(0,zid),0), drive=texelFetch(ecologyTex,ivec2(1,zid),0);
+ vec4 rhythm=texelFetch(ecologyTex,ivec2(2,zid),0);int species=int(round(eco.r*255.));float rate=header.r*(.40+.60*control.r),phase=header.g*6.2831853;
+ float wake=eco.b,pressureLocal=eco.a,recallDrive=drive.r,repairDrive=drive.g,conflictDrive=drive.b,epochDrive=drive.a;
+ vec4 percept=texture(perceptTex,uv);
+ float gx=lum(get(prev,p+ivec2(1,0)).rgb)-lum(get(prev,p-ivec2(1,0)).rgb);
+ float gy=lum(get(prev,p+ivec2(0,1)).rgb)-lum(get(prev,p-ivec2(0,1)).rgb);
+ float edge=length(vec2(gx,gy));
+ vec2 axis=vec2(cos(phase),sin(phase));
+ vec2 tangent=edge>.04?normalize(vec2(-gy,gx)):axis;
+ if(dot(tangent,axis)<0.)tangent=-tangent;
+ float size=clamp(float(dim.y)/720.,.75,2.5);
+ float u=dot(z,axis)/size,w=dot(z,vec2(-axis.y,axis.x))/size;
+ // Each local virtual machine operates on an address register, a predicate register,
+ // and an image-source register. Instructions compose, not merely select effects.
+ vec2 address=vec2(0.);
+ float gate=.55,threshold=.5,selection=0.,invertFlag=0.,shock=0.,memoryMix=0.,inkBias=0.,reg=belief.r-.5,tear=0.,suture=0.;
+ int skip=0;
+ float pitch=5.+floor(header.b*42.);
+ float drift=(rhythm.r*255.*256.+rhythm.g*255.)/65535.*6.2831853;
+ float band=sin(w/pitch+sin(u*.018+phase)*1.5-drift);
+ for(int j=0;j<10;j++){
+  if(j>=lengthCode)break;
+  if(skip>0){skip--;continue;}
+  vec4 instr=texelFetch(programTex,ivec2(j,zid),0);
+  int op=int(round(instr.r*255.));float arg=instr.g*2.-1.;
+  float amount=(.6+instr.b*5.)*size;
+  int condition=int(round(instr.a*255.));
+  bool run=condition==0||(condition==1&&edge>.13)||(condition==2&&percept.r>.15)||(condition==3&&percept.g>.12)||(condition==4&&lum(old.rgb)<.53)||(condition==5&&lum(old.rgb)>.53)||(condition==6&&band>-.15)||(condition==7&&percept.b<.38)||(condition==8&&control.g>.25)||(condition==9&&reg>0.)||(condition==10&&control.b>.48)||(condition==11&&belief.g>.45);
+  if(!run)continue;
+  vec2 ax=rot(axis,arg*1.57),normal=vec2(-ax.y,ax.x);
+  if(op==0)address+=ax*amount;
+  else if(op==1)address+=tangent*amount*(arg<0.?-1.:1.);
+  else if(op==2){float h=dot(z+address,normal)/size;address+=ax*sign(sin(h/(3.+instr.b*16.)+phase))*amount;}
+  else if(op==3){float h=dot(z+address,ax);float span=(4.+instr.b*38.)*size;address+=ax*(mod(h,span)-span*.5)*arg;}
+  else if(op==4){float h=dot(z+address,normal)/size;address+=normal*sign(sin(h*.15+sin(u*.025)*2.))*amount;}
+  else if(op==5)address=rot(address,arg*1.57)+normal*amount*.5;
+  else if(op==6){float branch=sin(dot(z+address,ax)/(size*(4.+instr.b*18.))+phase);address+=normal*sign(branch)*amount;gate*=.55+.45*abs(branch);}
+  else if(op==7){gate*=.25+.75*smoothstep(-.45,.45,band+arg*.3);}
+  else if(op==8){gate=clamp(gate+arg*.5+edge*.32,0.,1.);}
+  else if(op==9){selection=1.;memoryMix=max(memoryMix,.35+instr.b*.55);}
+  else if(op==10){selection=2.;}
+  else if(op==11){invertFlag=1.-invertFlag;}
+  else if(op==12){shock=arg;}
+  else if(op==13){pitch=max(3.,pitch*(.6+instr.b));gate*=step(-.2,sin((w+u*.28)/pitch-drift));}
+  else if(op==14){float strip=floor(dot(z+address,normal)/(size*(4.+instr.b*14.)));address+=ax*(mod(strip,3.)-1.)*amount; }
+  else if(op==15){threshold=instr.b;selection=3.;}
+  else if(op==16){inkBias=arg;gate*=smoothstep(-.45,.5,sin(u*.026+phase+w*.018));}
+  else if(op==17){if(percept.g>.15)address=-address+normal*amount;else address+=ax*amount*.35;}
+  else if(op==18){reg=clamp(reg+arg*(.25+percept.r),-1.,1.);}
+  else if(op==19){if(reg*arg<0.)skip=1+int(instr.b*2.);}
+  else if(op==20){address+=normal*reg*amount*2.;}
+  else if(op==21){tear=max(tear,instr.b*(.35+.65*control.g));reg=-reg;}
+  else if(op==22){suture=max(suture,instr.b);gate*=.85;}
+  else if(op==23){float h=dot(z+address,ax)/size;address+=normal*(abs(mod(h,12.+instr.b*35.)-6.)-3.)*arg*size;}
+  else if(op==24){float e=percept.r-belief.r;address+=tangent*e*amount*3.;reg=clamp(reg+e,-1.,1.);}
+  else if(op==25){selection=control.g>.32?1.:0.;memoryMix=max(memoryMix,instr.b);}
+  else if(op==26){float fold=sin(u*.031+phase)*sin(w*.052-drift);address=address*(.5+abs(reg))+ax*fold*amount;}
+  else if(op==27){gate=clamp(gate*(.65+control.b*.6)+reg*.25,0.,1.);}
+  else if(op==28){float f=dot(z+address,normal)/size;address+=ax*sign(sin(f/(3.+instr.b*25.)))*amount*(.3+pressureLocal);}
+  else if(op==29){float line=dot(z+address,ax)/size;address+=normal*(floor(line/(5.+instr.b*36.))*arg-floor(line/(5.+instr.b*36.))*.5)*amount*.14;}
+  else if(op==30){float f=sin(dot(z+address,normal)/size*.09+phase);gate*=smoothstep(-.25,.4,f);address+=tangent*sign(f)*amount;}
+  else if(op==31){address=rot(address,reg*2.1)+ax*amount*conflictDrive;}
+  else if(op==32){selection=recallDrive>.35?1.:2.;memoryMix=max(memoryMix,instr.b*.85);}
+  else if(op==33){gate*=1.-repairDrive*.65;suture=max(suture,instr.b);}
+  else if(op==34){float period=(5.+instr.b*25.)*size;address+=normal*(floor(dot(z+address,normal)/period)*period-dot(z+address,normal))*arg;}
+  else if(op==35){float d0=sin(u*.017+w*.043+phase);float d1=sin(u*.061-w*.019-drift);address+=ax*sign(d0*d1)*amount;tear=max(tear,abs(d0*d1)*instr.b*.65);}
+  else if(op==36){reg=clamp(reg+pressureLocal-repairDrive,-1.,1.);if(reg*arg<0.)skip=1;}
+  else if(op==37){shock=reg;address+=normal*amount*(percept.g-.25)*3.;}
+  else if(op==38){float q=fract((u+abs(w)*arg)/(4.+instr.b*17.));gate*=step(.26,q);address+=ax*(q-.5)*amount*2.;}
+  else if(op==39){if(conflictDrive>.4){address=-address;invertFlag=1.-invertFlag;}else gate*=.48;}
+  else if(op==40){float period=(10.+instr.b*22.)*size;float q=dot(z+address,normal);address+=normal*(abs(mod(q,period)-period*.5)-mod(q,period))*arg;}
+  else if(op==41){float k=sin(u*.023+phase);address+=tangent*floor(k*4.)*amount;gate*=.4+.6*abs(k);}
+  else if(op==42){float n=dot(z+address,ax)/size;address+=ax*floor(sin(n*.065+drift)*3.)*amount;shock=reg*.8;}
+  else if(op==43){if(recallDrive>pressureLocal){selection=1.;memoryMix=max(memoryMix,instr.b);}else{selection=0.;address=rot(address,reg*1.57);}}
+  address=clamp(address,vec2(-45.*size),vec2(45.*size));
+ }
+ // Irregular, coherent areas of activity. Pixel noise is not the motion driver.
+ float fieldWave=sin(u*.023+sin(w*.014+phase)*2.3+drift)+sin(w*.038-u*.013-drift*2.);
+ float pulse=.22+.78*smoothstep(-.75,.85,fieldWave);
+ float localMask=smoothstep(-.72,.12,band+sin(u*.051+phase)*.38);
+ // Species modify the mechanics, not just the strength of the same effect.
+ float speciesGate=1.;
+ if(species==0){address+=tangent*size*(2.+pressureLocal*8.)*sign(sin(w*.12+phase));localMask=max(localMask,smoothstep(.10,.55,edge)*.8);speciesGate=.65+pressureLocal*.8;}
+ if(species==1){shock=-.75;address=axis*size*(2.+5.*pressureLocal);localMask=smoothstep(-.25,.65,sin(u*.025+w*.037+phase));speciesGate=.9;}
+ if(species==2){selection=recallDrive>.18?1.:selection;memoryMix=max(memoryMix,recallDrive*.85);address*=.5;speciesGate=.65+recallDrive*.65;}
+ if(species==3){address=rot(address,1.57*sign(sin(w*.04+phase)));localMask=smoothstep(-.18,.45,sin(w*.11+u*.035+phase));speciesGate=.9;}
+ if(species==4){selection=repairDrive>.48?2.:selection;suture=max(suture,repairDrive);address*=.35;speciesGate=.44;}
+ if(species==5){address+=tangent*size*(percept.r-belief.r)*12.;speciesGate=.38+control.g*.75;localMask=max(localMask,edge*.7);}
+ if(species==6){float fold=sin(u*.026+phase)*sin(w*.033+phase);address=rot(address,fold*1.8)+vec2(-axis.y,axis.x)*fold*size*9.;tear=max(tear,conflictDrive*.7);speciesGate=.6+conflictDrive*.7;}
+ if(species==7){address+=axis*size*sign(sin(w*.055+phase))*7.*conflictDrive;speciesGate=.48+conflictDrive*.85;}
+ if(species==8){address*=.4;speciesGate=.22+pressureLocal*.35;}
+ float impulse=rhythm.b;float cadence=species==3?(.24+.76*step(.48,sin(drift*3.+phase))):species==8?(.13+.87*impulse):species==2?(.35+.65*smoothstep(.1,.9,sin(drift)*.5+.5)):(.72+.28*sin(drift+phase));
+ float activity=clamp(gate*pulse*(.37+rate*.55)*vmPower*(.55+control.r*.55)*speciesGate*wake*(.44+epochDrive*.72)*cadence*(.76+impulse*.48),0.,.90);
+ float stable=rnd(ivec2(floor(vec2(u,w)/vec2(4.,3.))),zid*173+int(key));
+ vec3 v=old.rgb;
+ ivec2 source=p+ivec2(round(address));
+ if(stable<activity&&localMask>.08){
+  vec3 sampled=get(prev,source).rgb;
+  if(selection==2.)sampled=get(original,source).rgb;
+  if(selection==1.){
+   // Memories contain quantised tone, edge orientation, edge magnitude and density.
+   // Reconstruct a graphic mark from those descriptors; there is no stored full image.
+   vec2 mUV=clamp((vec2(source)+.5)/vec2(dim),vec2(.0),vec2(1.));
+   vec4 m=texture(recallTex,mUV);
+   float angle=m.g*6.2831853;
+   vec2 oriented=vec2(cos(angle),sin(angle));
+   float lineCoord=dot(z+address,oriented)/size;
+   float gap=3.+floor(m.a*16.);
+   float line=fract(lineCoord/gap+phase);
+   float recovered=m.r>.54?.96:.055;
+   if(m.b>.16&&line<(.12+m.b*.20))recovered=1.-recovered;
+   if(m.a>.62&&fract(dot(z,vec2(-oriented.y,oriented.x))/size/(gap*1.8))<.09)recovered=1.-recovered;
+   if(rnd(ivec2(floor(z/(size*6.))),zid+37)<memoryMix*recallPower*.8)sampled=vec3(recovered);
+  }
+  if(selection==3.){float a=lum(sampled);if(abs(a-lum(old.rgb))>.18)sampled=vec3(a>threshold?.96:.055);}
+  if(abs(shock)>.18){vec3 a=get(prev,source+ivec2(round(tangent*2.*size))).rgb,b=get(prev,source-ivec2(round(tangent*2.*size))).rgb;sampled=shock>0.?max(sampled,max(a,b)):min(sampled,min(a,b));}
+  if(invertFlag>.5&&edge>.10)sampled=1.-sampled;
+  if(abs(inkBias)>.3&&edge>.08&&localMask>.76)sampled=vec3(inkBias>0.?.95:.06);
+  v=sampled;
+ }
+ // Slow structural repair is distinct from animation; quiet regions preserve the drawn grammar.
+ float chance=rnd(p,tick+entropy+zid*47);
+ float repair=(.008+meta.b*.018)*(1.-activity*.45)*(1.+suture*.4+repairDrive*.95+max(0.,.45-percept.r)*.5);
+ if(chance<repair)v=home.rgb;
+ float slit=0.;
+ // Connected fracture paths extend across ownership borders. No dash or pixel-noise gating.
+ for(int ci=0;ci<6;ci++){
+  vec4 A=cutA[ci],B=cutB[ci];if(B.a<.002)continue;
+  vec2 d=(uv-A.xy)*vec2(float(dim.x)/float(dim.y),1.);
+  if(abs(d.x)+abs(d.y)>A.z*2.2+.03)continue;
+  vec2 ax=vec2(cos(A.w),sin(A.w)),normal=vec2(-ax.y,ax.x);
+  float along=dot(d,ax),across=dot(d,normal),reach=max(.003,A.z);
+  float k=along/reach;
+  float tri=abs(fract(along*9.+B.x)*2.-1.)-.5;
+  float center=tri*B.y*.065+along*B.z*.08;
+  float distanceToLine=across-center;
+  float extent=1.-smoothstep(reach*.95,reach,abs(along));
+  float taper=max(.22,1.-pow(abs(k),3.));
+  float px=1./float(dim.y),halfWidth=(.0011+.0029*B.y)*taper+px*.60;
+  float core=(1.-smoothstep(max(0.,halfWidth-px),halfWidth+px,abs(distanceToLine)))*extent*B.a;
+  float branchDist=abs(distanceToLine-sign(along)*max(0.,abs(along)-.035)*(.23+B.y*.16));
+  float fork=(1.-smoothstep(px*.6,halfWidth*.65+px,branchDist))*extent*B.a*step(.035,abs(along))*smoothstep(.45,.8,B.y);
+  float seam=max(core,fork*.78);
+  float shoulder=(1.-smoothstep(halfWidth,halfWidth*4.,abs(distanceToLine)))*extent*B.a;
+  if(shoulder>.01){ivec2 move=ivec2(round(normal*sign(distanceToLine)*(1.+shoulder*8.)*size+ax*B.z*size*3.));v=mix(v,get(prev,p+move).rgb,shoulder*.85);}
+  // Fixed opposing ink edges retain continuity across dark and light surfaces.
+  float lip=(1.-smoothstep(px*.65,px*1.9,abs(distanceToLine-halfWidth*1.15)))*extent*B.a;
+  v=mix(v,vec3(B.z>0.?.94:.055),lip*.75);
+  v=mix(v,vec3(B.z>0.?.055:.94),seam*.96);
+  slit=max(slit,seam);
+ }
+ vec4 cut=get(fractures,p);
+ // Inscription is part of the feedback, not a screen-space overlay. Stable micro-cuts accumulate before slowly being repaired.
+ float scratchGrain=rnd(ivec2(floor(z/size)),int(key)+719);
+ float scarMask=cut.a*(.54+.46*smoothstep(.025,.23,edge));
+ if(scarMask>.012&&scratchGrain<scarMask*.92&&chance<scarMask*fractureStrength*.30){v=mix(v,cut.rgb,clamp(scarMask*1.25,0.,1.));}
+ if(scarMask>.08&&chance<.055*scarMask){vec2 etchDir=vec2(-gy,gx);if(length(etchDir)>.02){ivec2 nib=ivec2(round(normalize(etchDir)*size*2.));v=mix(v,get(prev,p+nib).rgb,.65);}}
+ vec4 agent=texture(agentsTex,uv);
+ if(agent.a>.12&&chance<agent.a*.065)v=agent.rgb;
+ // Chromatic matter is carried by actual ink. Continuous luminance-preserving colour
+ // deposition avoids random coloured pixel sparks and rectangular washes.
+ float baseTone=lum(v),localTone=percept.a;
+ float chroma=max(v.r,max(v.g,v.b))-min(v.r,min(v.g,v.b));
+ if(chroma>.003)v=mix(vec3(baseTone),v,.986);
+ float colourSupport=0.;vec3 colourInk=vec3(0.);
+ for(int j=0;j<4;j++){
+  vec4 A=accentA[j],B=accentB[j],C=accentC[j];if(B.a<.001)continue;
+  vec2 delta=(uv-A.xy)*vec2(float(dim.x)/float(dim.y),1.);
+  vec2 dir=vec2(cos(A.w),sin(A.w)),normal=vec2(-dir.y,dir.x);
+  float len=dot(delta,dir),width=dot(delta,normal),radius=max(.012,A.z);
+  float furrow=width-sin(len*32.+C.z*6.283)*.012;
+  float mode=C.x;
+  float edgeInk=smoothstep(.045,.40,edge);
+  float ink=localTone>.52?(1.-smoothstep(.22,.57,baseTone)):smoothstep(.48,.83,baseTone);
+  // The ink mask is based on contrast against the local ground, never on a rectangle.
+  float mark=ink*smoothstep(.08,.32,abs(baseTone-localTone));
+  float front=(1.-smoothstep(radius*.70,radius,abs(len)))*(1.-smoothstep(.007,.025+C.y*.035,abs(furrow)));
+  float geometry=mark;
+  if(mode<.5)geometry=max(mark*.65,edgeInk*.75);
+  else if(mode<1.5)geometry=max(mark*.35,slit*.95+scarMask*.35);
+  else if(mode<2.5)geometry=mark*(selection==1.?1.:recallDrive*.45);
+  else geometry=max(mark*.88,scarMask*.65);
+  float signal=front*clamp(geometry,0.,1.)*B.a;
+  if(signal>colourSupport){colourSupport=signal;colourInk=B.rgb;}
+ }
+ if(colourSupport>.003){
+  // Match the luminance of the pigment to the existing graphic mark.
+  float hueL=lum(colourInk);float target=clamp(baseTone*.62+hueL*.38,.045,.94);
+  vec3 inkColour=target<hueL?colourInk*(target/max(.01,hueL)):mix(colourInk,vec3(1.),(target-hueL)/max(.01,1.-hueL));
+  v=mix(v,inkColour,clamp(colourSupport*.15,0.,.19));
+ }
+ outColor=vec4(v,max(old.a*.93,activity*.42));
+}`)}const show=program(display),vao=gl.createVertexArray();gl.bindVertexArray(vao);
 const U=(p,n)=>gl.getUniformLocation(p,n);
 const su=Object.fromEntries(['prev','original','field','fractures','dim','tick','key','entropy','fractureStrength','imprint','pigmentMap','agentsTex','zoneTex','programTex','perceptTex','recallTex','vmPower','recallPower','brainTex','cutPower','accentA[0]','accentB[0]','accentC[0]','ecologyTex','worldAge','cutA[0]','cutB[0]','grammarA[0]','grammarB[0]','grammarPower'].map(n=>[n,U(sim,n)])),du={tex:U(show,'tex'),view:U(show,'viewSize')};
 function texture(data){let a=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,a);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,data);return a}
