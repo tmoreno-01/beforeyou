@@ -112,6 +112,7 @@ void main(){
  }
  // Rare local nucleation is attached to an existing contour and driven by stress.
  if(stage==1&&edge>.5&&ageCell>.45&&rnd(p,tick/5+salt+43)<rate*stress*.018)next=1.-v;
+ if(stage==1&&ageCell>.9&&goal==0&&edge<.5&&stress>.35&&rnd(p,tick/13+salt+17)<rate*.0025){float priorEdge=abs(ancestral-ink(at(original,p+ivec2(1,0)).rgb))+abs(ancestral-ink(at(original,p+ivec2(0,1)).rgb));if(priorEdge>.5)next=1.-v;}
  bool changed=abs(next-v)>.5;
  float cellAge=changed?0.:min(1.,ageCell+.011);
  vec3 black=vec3(.075,.075,.075),white=vec3(.949,.945,.922);
@@ -319,7 +320,7 @@ function newInstruction(group){
  return [pick(ruleGroups[group]),Math.round(25+rand()*205),Math.round(35+rand()*195),4+Math.pow(rand(),1.5)*16,R(30),R(16),Math.round(45+rand()*150)];
 }
 // Track exact rule combinations for the lifetime of each region, plus a stricter recent-family memory.
-function ruleKey(a){return [(a[0]+a[4]*3)%12,a[0]%2,a[4]%4,a[5]].join('/')}
+function ruleKey(a){let k=(a[0]+a[4]*3)%12;if(profile.process===0)return [k,a[5]%4,Math.floor(a[1]/32),Math.floor(a[2]/32)].join('/');if(profile.process===1)return [k,Math.floor(a[1]/32),Math.floor(a[2]/32)].join('/');return [k,(a[0]+a[5])%2,a[4]%4,a[5]%7,Math.floor(a[1]/32)].join('/');}
 function family(a){return (a[0]+a[4]*3)%12}
 function rememberRule(d,a){
  d.usedRules.add(ruleKey(a));d.recent.push([family(a),a[4]%4,a[5]]);
