@@ -558,8 +558,8 @@ function mutateProgram(d,donor){
  return g;
 }
 function trial(d,g){
- if(!d.features||d.trial)return false;
- let changed=JSON.stringify(g.map(a=>a.slice(4)))!==JSON.stringify(d.code.map(a=>a.slice(4)));if(changed)reconstructionTrials++;d.trial={changed,old:copyProgram(d.code),oldActive:d.active?.slice(),before:d.features.slice(),score:score(d,d.features),until:age+6+rand()*7,samples:[]};d.code=g;d.pc=1;d.next=age;d.active=g[0].slice();d.stage=1;d.stageStart=age;d.stageEnd=d.trial.until+3;learnCount++;comboChanges++;return true;
+ if(!d.features||d.trial||(d.stage===3&&age<d.stageEnd-1))return false;
+ let changed=JSON.stringify(g.map(a=>a.slice(4)))!==JSON.stringify(d.code.map(a=>a.slice(4)));if(changed)reconstructionTrials++;d.trial={changed,old:copyProgram(d.code),oldActive:d.active?.slice(),before:d.features.slice(),score:score(d,d.features),until:age+6+rand()*7,samples:[]};let chosen=g.findIndex((a,i)=>JSON.stringify(a)!==JSON.stringify(d.code[i]));if(chosen<0)chosen=0;d.code=g;d.pc=chosen+1;d.next=age;d.active=g[chosen].slice();d.stage=1;d.stageStart=age;d.stageEnd=d.trial.until+3;learnCount++;comboChanges++;return true;
 }
 function cognitionTick(){
  observeStrata();if(age<programNext)return;programNext=age+.18;
