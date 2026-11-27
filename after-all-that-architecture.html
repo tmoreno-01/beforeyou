@@ -346,7 +346,7 @@ function architecturalBirth(){
    if(pts.length)pts.push([k,old]);pts.push([k,v],[end-1,v]);k=end;
   }return {a,pts};
  }
- let slope=(rand()<.5?-1:1)*(mode===1?.34:.52);
+ let slope=(rand()<.5?-1:1)*(mode===1?.43:.75);
  let h0=boundary(W,H,mode===1?.57:.49,slope,mode===2?17:11),v0=boundary(H,W,mode===1?.72:.51,(rand()<.5?-1:1)*.23,mode===2?11:7);
  let h1=boundary(W,H,.73,-slope*.42,8);
  let invert=rand()<.28;
@@ -368,6 +368,20 @@ function architecturalBirth(){
   else if(k%4===2){for(let i=origin;i<Math.min(W,origin+len);i+=pitch){let yy=h0.a[i],l=Math.max(1,Math.floor(depth*(.3+.7*(i-origin)/len)));stroke(i,yy,i,yy+side*l,col);}}
   else{for(let j=0;j<depth;j+=2)for(let i=0;i<len;i+=2){let yy=y+side*j;if(rand()<.66*(1-j/depth))pix(origin+i,yy,col);}}
  }
+ // Secondary architectural ribs break the large planes without filling every surface.
+ let ribs=mode===1?5:mode===2?10:7;
+ for(let k=0;k<ribs;k++){
+  let y=int(0,H-1),x=v0.a[y],len=int(Math.max(4,H*.10),Math.max(6,H*.28)),side=rand()<.5?-1:1;
+  let yy=cl(y-Math.floor(len*.22),0,H-1),width=int(3,Math.max(4,W*(mode===1?.055:.09))),pitch=int(2,3);
+  let tone=get(cl(x+side*width,0,W-1),yy)>128?ink:paper;
+  if(k%3===0){for(let j=0;j<width;j+=pitch){let xx=x+side*j,l=Math.max(2,Math.floor(len*(1-j/width*.6)));stroke(xx,yy,xx,yy+l,tone);}}
+  else if(k%3===1){block(x+side*width,yy,Math.max(2,width*.5),len,tone);stroke(x,yy,x+side*width,yy,tone);}
+  else{for(let j=0;j<len;j+=pitch){let v=yy+j;if(v>=H)break;let xx=v0.a[v];stroke(xx,v,xx+side*Math.max(1,Math.floor(width*(.35+.65*j/len))),v,tone);}}
+ }
+ // Sparse stepped trace in a calm field, attached to a connected seam.
+ let trail=boundary(W,H,mode===1?.24:.19,-slope*.28,12);
+ for(let x=0;x<W;x++){let yy=trail.a[x];if(rand()<(mode===1?.16:.23)){let v=get(x,yy);pix(x,yy,v>128?ink:paper);if(rand()<.10)pix(x,yy+1,v>128?ink:paper);}}
+ architecturePaths.push(trail.pts.map(([x,y])=>[normX(x),normY(y)]));
  // A long structural spine with missing joints and clean orthogonal connections.
  let ySpine=cl(Math.round(H*(mode===1?.59:.48)),1,H-2);
  for(let x=0;x<W;x++){
@@ -662,7 +676,7 @@ function historyTick(){
  let updated=live.slice();
  for(let y=0;y<p.h;y++){let k=((p.y+y)*W+p.x)*4;for(let x=0;x<p.w;x++){let i=(y*p.w+x)*4;if(out[i]!==baseData[k+x*4])updated.set(out.subarray(i,i+4),i);}baseData.set(out.subarray(y*p.w*4,(y+1)*p.w*4),k);}
  let box={x:p.x,y:H-p.y-p.h,w:p.w,h:p.h};upload(base,box,out);upload(targets[read],box,updated);upload(archive,box,out);
- historyCount++;faultCount++;candidate.commitAt=age;candidate.legacy=Math.min(1,candidate.legacy+.14);candidate.relay=.9;
+ historyCount++;faultCount++;for(let yy=Math.floor(p.y/H*48);yy<Math.ceil((p.y+p.h)/H*48);yy++)for(let xx=Math.floor(p.x/W*64);xx<Math.ceil((p.x+p.w)/W*64);xx++){let i=yy*64+xx;if(historyCoverage[i]<255)historyCoverage[i]++;}candidate.commitAt=age;candidate.legacy=Math.min(1,candidate.legacy+.14);candidate.relay=.9;
  let y=1-(p.y+p.h*.5)/H,x0=p.x/W,x1=(p.x+p.w)/W;architecturePaths.push([[x0,y],[x0+(x1-x0)*.45,y],[x0+(x1-x0)*.45,y+.014],[x1,y+.014]]);
  if(architecturePaths.length>18)architecturePaths.splice(3,1);
 }
