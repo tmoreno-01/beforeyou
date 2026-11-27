@@ -458,8 +458,8 @@ function deepMemory(){
 function newFracture(){
  if(!fractureCtx)return;
  if(scarPaths.length<12){
-  let d=Array.from(cognition.values()).filter(d=>d.features&&attentionOf(d.box)>.20).sort((a,b)=>b.predictionError-a.predictionError),target=d.length&&rand()<.7?pick(d.slice(0,Math.min(12,d.length))).box:null;
-  let x=target?(target.x+target.w*.5)/W:.15+rand()*.7,y=target?(target.y+target.h*.5)/H:.15+rand()*.7;
+  let d=Array.from(cognition.values()).filter(d=>d.features&&attentionOf(d.box)>.20).sort((a,b)=>b.predictionError-a.predictionError),target=d.length?pick(d.slice(0,Math.min(12,d.length))).box:null;
+  let x=target?(target.x+target.w*.5)/W:attention.x,y=target?(target.y+target.h*.5)/H:1-attention.y;
   let span=.10+Math.pow(rand(),1.5)*.40,angle=pick([-.65,-.27,0,.24,.58,1.15,1.57]),pts=[];
   for(let k=0;k<=6;k++){let u=(k/6-.5)*span,v=(k===0||k===6?0:(rand()-.5)*span*.24);pts.push([x+Math.cos(angle)*u-Math.sin(angle)*v,y+Math.sin(angle)*u+Math.cos(angle)*v])}
   scarPaths.push({pts,start:age,rise:2+rand()*5,hold:8+rand()*16,wear:12+rand()*22,ink:rand()<.5?'#101010':'#f5f5f2',width:.002+Math.pow(rand(),2)*.013,branch:rand()});
@@ -546,7 +546,7 @@ function trial(d,g){
 function cognitionTick(){
  observeStrata();if(age<programNext)return;programNext=age+.18;
  let pending=[];
- for(const e of signalQueue){if(e.at>age){pending.push(e);continue}let d=cognition.get(e.to);if(d){if(d.trial||attentionOf(d.box)<.06){if(age-e.at<15){e.at=age+2;pending.push(e)}continue}if(trial(d,mutateProgram(d,e.code))){exchangeCount++;d.impulse=.8;d.rest=0;}}}
+ for(const e of signalQueue){if(e.at>age){pending.push(e);continue}let d=cognition.get(e.to);if(d){if(d.trial||attentionOf(d.box)<.06){if(age<(e.expires??(e.expires=age+15))){e.at=age+2;pending.push(e)}continue}if(trial(d,mutateProgram(d,e.code))){exchangeCount++;d.impulse=.8;d.rest=0;}}}
  signalQueue=pending;
  let candidates=boxes.map(brainFor).filter(d=>age>=d.next&&attentionOf(d.box)>.10).sort((a,b)=>(b.next<age?attentionOf(b.box):0)-(a.next<age?attentionOf(a.box):0)||a.next-b.next).slice(0,4);
  for(const d of candidates){
@@ -637,7 +637,7 @@ function attentionTick(){
  }
  let k=1-Math.exp(-dt*.34);
  for(const key of ['x','y','rx','ry','power'])attention[key]+=(attentionTarget[key]-attention[key])*k;
- for(let i=0;i<attentionVisits.length;i++)attentionVisits[i]*=Math.exp(-dt*.0012);
+ const decay=Math.exp(-dt*.0012);for(let i=0;i<attentionVisits.length;i++)attentionVisits[i]*=decay;
 }
 function subtractStructure(d,collapse=false){
  let p=regionPatch(d,collapse?1.65:1.15),live=readPatch(p.x,p.y,p.w,p.h),out=live.slice();
