@@ -90,6 +90,8 @@ void main(){
  vec2 grad=vec2(lum(r)-lum(l),lum(u)-lum(d));float edge=length(grad);
  float scale=max(3.,float(min(dim.x,dim.y))*(.055+.13*r2.a));
  float localTime=t*(.23+pace*.9)+float(id)*.71;
+ // Slowly changing cadence makes even an active instruction non-metronomic.
+ localTime+=sin(t*.073+float(id)*1.91)*.8+sin(t*.031+float(id)*.53)*1.1;
  float spatial=smoothNoise(z/(scale*1.4)+vec2(localTime*.025),salt+7);
  float envelope=stage==0?(.16+.84*smoothstep(0.,.55,progress)):stage==1?1.:stage==2?(1.-smoothstep(.05,.85,progress))*.8:0.;
  float amplitude=(.32+strength*1.35)*envelope*(.6+.4*react);
@@ -500,7 +502,7 @@ function ruleKey(a){return [a[0],a[4],a[5]].join('/')}
 function family(a){return a[0]<32?a[0]%16:16+a[0]-32}
 function rememberRule(d,a){
  d.usedRules.add(ruleKey(a));d.recent.push([family(a),a[4],a[5]]);
- if(d.recent.length>8)d.recent.shift();d.lastActiveChange=age;
+ if(d.recent.length>8)d.recent.shift();d.lastActiveChange=age;d.visualRepeats=0;
  // Memory bounded by the finite instruction space, not by a short cycle.
 }
 function chooseNovel(d,preferred){
@@ -512,7 +514,7 @@ function chooseNovel(d,preferred){
   let a=preferred&&k<12?preferred.slice():newInstruction(d.group);
   a[0]=R(46);a[4]=R(30);a[5]=R(16);
   if(!legal(a))continue;
-  let stat=d.policy.get(ruleKey(a)),v=(stat?.value??0)+.12/Math.sqrt(1+(d.visits[a[0]]||0));
+  let v=(d.reward[a[0]]||0)*.65+.12/Math.sqrt(1+(d.visits[a[0]]||0));
   if(d.goal===0&&a[5]<8)v+=.12;if(d.goal===3&&a[4]>=16)v+=.10;
   pool.push({a,v});
  }
@@ -547,7 +549,7 @@ function movementTick(){
  for(const b of boxes){
   let d=brainFor(b);
   if(!d.active){d.active=chooseNovel(d,d.code[0]);rememberRule(d,d.active);d.stage=0;d.stageStart=age;d.stageEnd=age+2+rand()*4;d.motionAngle=rand();d.motionScale=rand();d.confidence=.5;d.relay=0;d.mismatch=0;d.lastPigment=-100;d.lastRepair=-100;}
-  if(!d.trial&&d.stage===1&&age-d.lastActiveChange>6&&(d.visualRepeats>=3||age-d.lastActiveChange>23)){d.stage=2;d.stageStart=age;d.stageEnd=age+1.5;d.visualRepeats=0;forcedChanges++;}
+  if(!d.trial&&d.stage===1&&age-d.lastActiveChange>6&&(d.visualRepeats>=3||age-d.lastActiveChange>23)){d.active=chooseNovel(d,newInstruction(d.group));rememberRule(d,d.active);d.stage=0;d.stageStart=age;d.stageEnd=age+1.8;d.visualRepeats=0;forcedChanges++;comboChanges++;}
   if(age>=d.stageEnd){
    d.stage=(d.stage+1)%4;stageChanges++;d.stageStart=age;
    const f=d.features||[.3,.2,.12,.5];
@@ -619,14 +621,18 @@ function observeStrata(){
   d.mismatch=.78*(d.mismatch||0)+.22*clamp(d.predictionError*4+Math.abs(f[3]-.5)*.3,0,1);
   d.previous=[f[2],f[1],1];d.forecast=clamp(d.previous.reduce((sum,v,k)=>sum+v*d.weights[k],0),0,1);
   d.stagnation=d.features&&dist(d.features,f)<.035?d.stagnation+1:Math.max(0,d.stagnation-1);
-  let recentVisual=d.history.slice(-5,-1);d.visualRepeats=d.stage===1&&f[1]>.035&&recentVisual.some(v=>dist(v,f)<.022)?d.visualRepeats+1:Math.max(0,d.visualRepeats-1);
+  // Compare a coarse spatial signature, not only aggregate texture statistics.
+  let signature=[];for(let j=0;j<4;j++)for(let i=0;i<4;i++)signature.push(lum(sensePixels,Math.min(x1-1,x0+Math.floor((i+.5)*(x1-x0)/4)),Math.min(y1-1,y0+Math.floor((j+.5)*(y1-y0)/4))));
+  let recentVisual=d.visualHistory||[],repeat=recentVisual.slice(-6).some(v=>dist(v,signature)<.075);
+  d.visualRepeats=d.stage===1&&f[1]>.035&&(repeat||f[2]<.013)?d.visualRepeats+1:Math.max(0,d.visualRepeats-1);
+  d.visualHistory=[...recentVisual.slice(-9),signature];
   d.novelty=d.history.length?Math.min(...d.history.slice(0,-1).map(v=>dist(v,f)).concat([.3])):.15;d.features=f;
-  if(d.trial){d.trial.samples.push(f.slice());if(age>=d.trial.until&&d.trial.samples.length>=2){
+  if(d.trial){d.trial.samples.push(f.slice());if((age>=d.trial.until||d.visualRepeats>=3)&&d.trial.samples.length>=2){
    let measured=f.map((_,k)=>d.trial.samples.reduce((n,v)=>n+v[k],0)/d.trial.samples.length),value=score(d,measured),novel=dist(measured,d.trial.before),gain=value-d.trial.score;
    for(const op of new Set([d.active[0]])){d.visits[op]++;d.reward[op]+=(gain-d.reward[op])*.25}
    let key=ruleKey(d.active),stat=d.policy.get(key)||{value:0,n:0};stat.n++;stat.value+=(gain-stat.value)/stat.n;d.policy.set(key,stat);if(d.policy.size>192)d.policy.delete(d.policy.keys().next().value);
-   if(gain>-.012||novel>.10&&value>.51){d.generation++;d.quality=.75*d.quality+.25*value;acceptCount++;d.confidence=clamp((d.confidence??.5)*.85+.15*clamp(.6+gain*2,0,1),.1,.95);if(gain>.018){d.favourite=d.active.slice();d.lastSuccess=age;}if(d.trial.changed)reconstructionAccepted++;if(gain>.025&&novel>.055)d.legacy=Math.min(1,d.legacy+.055);if(novel>.07){learnArchive.push({code:copyProgram(d.code),features:measured.slice(),id:b.id});if(learnArchive.length>64)learnArchive.shift()}}
-   else{d.confidence=clamp((d.confidence??.5)*.78,.08,.95);d.lastFailure=age;d.code=d.trial.old;d.pc=0;d.active=chooseNovel(d,d.trial.oldActive||d.code[0]);rememberRule(d,d.active);d.stage=2;d.stageStart=age;d.stageEnd=age+3;rejectCount++}d.trial=null;
+   if(d.visualRepeats<3&&(gain>-.012||novel>.10&&value>.51)){d.generation++;d.quality=.75*d.quality+.25*value;acceptCount++;d.confidence=clamp((d.confidence??.5)*.85+.15*clamp(.6+gain*2,0,1),.1,.95);if(gain>.018){d.favourite=d.active.slice();d.lastSuccess=age;}if(d.trial.changed)reconstructionAccepted++;if(gain>.025&&novel>.055)d.legacy=Math.min(1,d.legacy+.055);if(novel>.07){learnArchive.push({code:copyProgram(d.code),features:measured.slice(),id:b.id});if(learnArchive.length>64)learnArchive.shift()}}
+   else{if(d.visualRepeats>=3){forcedChanges++;d.visualRepeats=0;}d.confidence=clamp((d.confidence??.5)*.78,.08,.95);d.lastFailure=age;d.code=d.trial.old;d.pc=0;d.active=chooseNovel(d,d.trial.oldActive||d.code[0]);rememberRule(d,d.active);d.stage=2;d.stageStart=age;d.stageEnd=age+3;rejectCount++}d.trial=null;
   }}
   d.history.push(f.slice());if(d.history.length>18)d.history.shift();
   if(d.predictionError>.08&&age-d.lastSend>15&&rand()<.18*profile.exchange){let near=boxes.filter(q=>q!==b&&adjacentLoose(b,q));if(near.length&&signalQueue.length<80){signalQueue.push({at:age+6+rand()*25,from:b.id,to:pick(near).id,code:copyProgram(d.code),force:d.predictionError});d.lastSend=age}}
