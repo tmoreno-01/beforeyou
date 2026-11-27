@@ -540,7 +540,7 @@ function observeStrata(){
    let measured=f.map((_,k)=>d.trial.samples.reduce((n,v)=>n+v[k],0)/d.trial.samples.length),value=score(d,measured),novel=dist(measured,d.trial.before),gain=value-d.trial.score;
    for(const op of new Set(d.code.map(x=>x[0]))){d.visits[op]++;d.reward[op]+=(gain-d.reward[op])*.25}
    if(gain>-.035||novel>.12&&value>.45){d.generation++;d.quality=.75*d.quality+.25*value;acceptCount++;if(d.trial.changed)reconstructionAccepted++;if(gain>.025&&novel>.055)d.legacy=Math.min(1,d.legacy+.055);if(novel>.07){learnArchive.push({code:copyProgram(d.code),features:measured.slice(),id:b.id});if(learnArchive.length>64)learnArchive.shift()}}
-   else{d.code=d.trial.old;d.pc=0;d.active=d.code[0].slice();d.stageEnd=age+1;rejectCount++}d.trial=null;
+   else{d.code=d.trial.old;d.pc=0;d.active=d.trial.oldActive||d.code[0].slice();d.stage=2;d.stageStart=age;d.stageEnd=age+3;rejectCount++}d.trial=null;
   }}
   d.history.push(f.slice());if(d.history.length>18)d.history.shift();
   if(d.predictionError>.08&&age-d.lastSend>15&&rand()<.18*profile.exchange){let near=boxes.filter(q=>q!==b&&adjacentLoose(b,q));if(near.length&&signalQueue.length<80){signalQueue.push({at:age+6+rand()*25,from:b.id,to:pick(near).id,code:copyProgram(d.code),force:d.predictionError});d.lastSend=age}}
@@ -559,12 +559,12 @@ function mutateProgram(d,donor){
 }
 function trial(d,g){
  if(!d.features||d.trial)return false;
- let changed=JSON.stringify(g.map(a=>a.slice(4)))!==JSON.stringify(d.code.map(a=>a.slice(4)));if(changed)reconstructionTrials++;d.trial={changed,old:copyProgram(d.code),before:d.features.slice(),score:score(d,d.features),until:age+6+rand()*7,samples:[]};d.code=g;d.pc=0;d.next=age;d.stageEnd=Math.min(d.stageEnd??age,age+1);learnCount++;return true;
+ let changed=JSON.stringify(g.map(a=>a.slice(4)))!==JSON.stringify(d.code.map(a=>a.slice(4)));if(changed)reconstructionTrials++;d.trial={changed,old:copyProgram(d.code),oldActive:d.active?.slice(),before:d.features.slice(),score:score(d,d.features),until:age+6+rand()*7,samples:[]};d.code=g;d.pc=1;d.next=age;d.active=g[0].slice();d.stage=1;d.stageStart=age;d.stageEnd=d.trial.until+3;learnCount++;comboChanges++;return true;
 }
 function cognitionTick(){
  observeStrata();if(age<programNext)return;programNext=age+.18;
  let pending=[];
- for(const e of signalQueue){if(e.at>age){pending.push(e);continue}let d=cognition.get(e.to);if(d){if(d.trial){e.at=age+2;pending.push(e);continue}if(trial(d,mutateProgram(d,e.code))){exchangeCount++;d.impulse=.8;d.rest=0;}}}
+ for(const e of signalQueue){if(e.at>age){pending.push(e);continue}let d=cognition.get(e.to);if(d){if(d.trial){if(age<(e.expires??(e.expires=age+20))){e.at=age+2;pending.push(e)}continue}if(trial(d,mutateProgram(d,e.code))){exchangeCount++;d.impulse=.8;d.rest=0;}}}
  signalQueue=pending;
  let candidates=boxes.map(brainFor).filter(d=>age>=d.next).sort((a,b)=>a.next-b.next).slice(0,6);
  for(const d of candidates){
