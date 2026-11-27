@@ -176,14 +176,14 @@ void main(){
  else if(morph==5){growth=step(1.5,vert)*step(h,.5);erosion=step(1.5,h)*step(vert,.5);}
  else if(morph==6){growth=step(2.5,card);erosion=step(1.5,card)*step(card,2.5)*step(diag,1.5);}
  else{growth=step(1.5,card)*step(diag,3.5);erosion=step(card,1.5)*step(diag,2.5);}
- float coherent=smoothNoise(z/(3.5+scale*.35)+vec2(localTime*.016),salt+307);
+ float localCoherence=smoothNoise(z/(3.5+scale*.35)+vec2(localTime*.016),salt+307);
  float morphRate=(study==0?.17:study==1?.33:.26)*envelope*(.6+.65*appetite);
  // Plastic logic develops longer geometric ribs; contradictory matter switches
  // between extension and recession according to current local crowding.
  if(study==1){int pitch=3+restore%5;int rail=mainLaw%2==0?p.x:p.y;float aligned=mainLaw%2==0?vert:h;growth=max(growth*.65,(rail%pitch==0?1.:0.)*step(.5,aligned));erosion=max(erosion*.75,step(1.5,aligned)*(rail%pitch==0?0.:.7));}
- if(study==2){float crowded=step(.53,coherent);growth*=.4+.6*crowded;erosion*=1.-crowded*.6;}
+ if(study==2){float crowded=step(.53,localCoherence);growth*=.4+.6*crowded;erosion*=1.-crowded*.6;}
  bool born=false;
- if(cellAge>.11&&cellEdge>.5&&noise(p,tick+salt+191)<morphRate*(.35+.65*coherent)){
+ if(cellAge>.11&&cellEdge>.5&&noise(p,tick+salt+191)<morphRate*(.35+.65*localCoherence)){
   if(binaryVal<.5&&noise(p,tick+salt+277)<growth){val=vec3(.075);born=true;}
   else if(binaryVal>.5&&noise(p,tick+salt+331)<erosion){val=vec3(.949,.945,.922);born=true;}
  }
